@@ -5,10 +5,10 @@ on:
     branches: [main]
     paths:
       - 'toeic_simulator/**'
-  workflow_dispatch:   # allow manual trigger
+  workflow_dispatch:
 
 permissions:
-  contents: write      # needed to create releases
+  contents: write
 
 jobs:
   build-windows:
@@ -16,25 +16,21 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      # ── 1. Checkout ────────────────────────────────────────────────────────
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ── 2. Python setup ────────────────────────────────────────────────────
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      # ── 3. Install dependencies ────────────────────────────────────────────
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install PyQt6 pyttsx3 pyinstaller
+          pip install PyQt6 pyttsx3 pyaudio vosk pyinstaller
         working-directory: toeic_simulator
 
-      # ── 4. Build EXE ───────────────────────────────────────────────────────
       - name: Build with PyInstaller
         run: |
           pyinstaller `
@@ -45,64 +41,79 @@ jobs:
             --hidden-import "pyttsx3.drivers.sapi5" `
             --hidden-import "pyttsx3.drivers.nsss" `
             --hidden-import "pyttsx3.drivers.espeak" `
+            --hidden-import "vosk" `
             --collect-all PyQt6 `
             main.py
         working-directory: toeic_simulator
         shell: pwsh
 
-      # ── 5. Package release ZIP ────────────────────────────────────────────
       - name: Package release
         run: |
-          New-Item -ItemType Directory -Path release -Force
+          New-Item -ItemType Directory -Path release\images\set1 -Force
+          New-Item -ItemType Directory -Path release\images\set2 -Force
+          New-Item -ItemType Directory -Path release\records      -Force
+          New-Item -ItemType Directory -Path release\model        -Force
           Copy-Item dist\TOEIC_Speaking_Simulator.exe release\
-          Copy-Item questions.json release\
-          New-Item -ItemType Directory -Path release\images -Force
-          # Write usage note
+          Copy-Item question_bank.json release\
           @"
-          TOEIC Speaking Test Simulator — 使用说明
-          ==========================================
+TOEIC Speaking Test Simulator v2 — 使用说明
+==============================================
 
-          1. 编辑 questions.json，填入您自己的题目。
-          2. 将 PART 2 的图片放入 images\ 文件夹。
-             图片路径需与 questions.json 中一致，例如 images\q3.jpg
-          3. 双击 TOEIC_Speaking_Simulator.exe 启动程序。
-          4. 点击"开始考试"即可进行 PART 1-5 全流程模拟。
+【基本使用】
+1. 编辑 question_bank.json，按格式填入各套题目与参考答案。
+2. 将 PART 2 图片分别放入 images\set1\、images\set2\ 等子文件夹。
+3. 双击 TOEIC_Speaking_Simulator.exe 启动程序。
+4. 在套题选择界面选择套题，点击「确认选择」开始考试。
+5. 考试中：
+   - 点击「跳过 ▶▶」按钮可跳过当前倒计时；
+   - 点击标题栏「?」按钮查看当前题目参考答案。
 
-          系统要求：Windows 10 / 11（64位）
-          无需安装 Python 或其他软件，双击即用。
-          "@ | Out-File -FilePath release\README.txt -Encoding utf8
-          Compress-Archive -Path release\* -DestinationPath TOEIC_Simulator_Windows.zip
+【录音与语音转文字（可选）】
+- 检测到麦克风时，作答阶段自动录音（标题栏显示 ● REC）。
+- 录音保存至 records\set_{编号}\ 文件夹。
+- 语音转文字需 vosk 模型：
+  a. 下载：https://alphacephei.com/vosk/models
+     推荐：vosk-model-small-en-us-0.15（约 40 MB）
+  b. 解压，将文件夹改名为 model，放在本程序目录下。
+
+【系统要求】
+Windows 10 / 11 (64-bit) — 无需安装 Python
+"@ | Out-File -FilePath release\README.txt -Encoding utf8
+          Compress-Archive -Path release\* -DestinationPath TOEIC_Simulator_Windows_v2.zip
         working-directory: toeic_simulator
         shell: pwsh
 
-      # ── 6. Upload artifact (always available) ─────────────────────────────
-      - name: Upload build artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TOEIC_Simulator_Windows
-          path: toeic_simulator/TOEIC_Simulator_Windows.zip
+          name: TOEIC_Simulator_Windows_v2
+          path: toeic_simulator/TOEIC_Simulator_Windows_v2.zip
           retention-days: 30
 
-      # ── 7. Create GitHub Release ──────────────────────────────────────────
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v1.0.${{ github.run_number }}"
-          name: "TOEIC Speaking Simulator v1.0.${{ github.run_number }}"
+          tag_name: "v2.0.${{ github.run_number }}"
+          name: "TOEIC Speaking Simulator v2.0.${{ github.run_number }}"
           body: |
-            ## 托业口语考试模拟器 — Windows EXE
+            ## 托业口语考试模拟器 v2 — Windows EXE
 
-            ### 下载
-            下载 `TOEIC_Simulator_Windows.zip`，解压后双击 EXE 即可运行。
+            ### 新增功能
+            - **多套题选择** — 支持批量导入多套完整 PART1-5 题目，启动后先选套题再开始考试
+            - **跳过按钮** — 倒计时阶段可点击「跳过 ▶▶」直接进入下一环节
+            - **隐蔽答案查看** — 标题栏「?」按钮，随时查看当前题目参考答案，不中断流程
+            - **麦克风录音 + 离线语音转文字** — 作答时自动录音，搭配 vosk 模型可离线转文字
 
-            ### 使用说明
-            1. 编辑 `questions.json` 填入自定义题目
-            2. 将 PART 2 图片放入 `images\` 文件夹
-            3. 双击 `TOEIC_Speaking_Simulator.exe`
-            4. 点击 **开始考试** 进行 PART 1–5 全流程模拟
+            ### 下载与使用
+            下载 `TOEIC_Simulator_Windows_v2.zip`，解压后：
+            1. 编辑 `question_bank.json` 填入自定义题目与答案
+            2. 将 PART 2 图片放入 `images\set1\`、`images\set2\` 等子文件夹
+            3. 双击 `TOEIC_Speaking_Simulator.exe` 启动
+            4. 可选：将 vosk 英文小模型解压为 `model\` 文件夹以启用语音转文字
+               下载：https://alphacephei.com/vosk/models（推荐 vosk-model-small-en-us-0.15）
 
             ### 系统要求
             Windows 10 / 11（64位），无需安装 Python
-          files: toeic_simulator/TOEIC_Simulator_Windows.zip
+          files: toeic_simulator/TOEIC_Simulator_Windows_v2.zip
           draft: false
           prerelease: false

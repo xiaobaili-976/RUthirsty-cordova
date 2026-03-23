@@ -1,29 +1,33 @@
 """
-Exam Engine — state machine that drives the full TOEIC Speaking Test flow.
+Exam Engine — state machine driving the full TOEIC Speaking Test flow.
 
-Each exam is modelled as an ordered list of *steps*; each step is a dict:
-  {"type": "screen",   "title": ..., "content": ..., "secondary": ..., "image": ...}
-  {"type": "tts",      "text": ...}
-  {"type": "timer",    "duration": <int seconds>, "phase": ...}
-  {"type": "end"}
+Step types
+──────────
+  screen      : update display; advance immediately (50 ms paint delay)
+  tts         : speak text; advance when TTSManager emits finished
+  timer       : count down N seconds; advance when counter hits 0
+  set_answer  : silently update current answer text; advance immediately
+  record_start: start microphone recording; advance immediately
+  record_stop : stop recording; advance immediately
+  end         : emit exam_finished
 
-Execution is fully sequential:
-  • "screen"  → update UI, then advance after a 50ms paint delay
-  • "tts"     → speak text; advance when TTSManager emits finished
-  • "timer"   → count down; advance when counter reaches 0
-  • "end"     → emit exam_finished
+New public API (v2)
+───────────────────
+  sets          -> list[dict]          all loaded sets  [{id, name}, ...]
+  load_set(id)                         select set before start_exam()
+  start_exam()                         build steps & run
+  skip()                               stop current timer, advance
 """
+import json
 import os
 import sys
-import json
+from typing import Optional
+
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from tts_manager import TTSManager
 
-
-# ──────────────────────────────────────────────
-#  Fixed instruction texts
-# ──────────────────────────────────────────────
+# ── Fixed instruction strings ────────────────────────────────────────────────
 _PART1_INTRO = (
     "In this part of the test, you will read aloud the text on the screen. "
     "You will have 45 seconds to prepare. "
@@ -55,23 +59,18 @@ _PART5_INTRO = (
     "topic. Be sure to say as much as you can in the time allowed. "
     "You will have 45 seconds to prepare. Then you will have 60 seconds to speak."
 )
-
 _BEGIN_PREPARING = "Begin preparing now"
 _BEGIN_READING   = "Begin reading now"
 _BEGIN_SPEAKING  = "Begin speaking now"
 
 
-# ──────────────────────────────────────────────
-#  Step-list builder
-# ──────────────────────────────────────────────
-def _build_steps(questions: dict, base_dir: str) -> list[dict]:
-    """Return the complete ordered list of exam steps."""
-    steps: list[dict] = []
+# ── Step builder ─────────────────────────────────────────────────────────────
+def _build_steps(set_data: dict, set_id: int, base_dir: str) -> list[dict]:
+    """Return the full ordered list of exam steps for one question set."""
 
-    def s(title="", content="", secondary="", image=""):
-        """Helper: screen step."""
+    def scr(title="", content="", secondary="", image="", answer=""):
         return {"type": "screen", "title": title, "content": content,
-                "secondary": secondary, "image": image}
+                "secondary": secondary, "image": image, "answer": answer}
 
     def t(text):
         return {"type": "tts", "text": text}
@@ -79,190 +78,172 @@ def _build_steps(questions: dict, base_dir: str) -> list[dict]:
     def tm(duration, phase=""):
         return {"type": "timer", "duration": duration, "phase": phase}
 
-    PREP  = "Preparation Time"
-    RESP  = "Response Time"
+    def sa(answer):
+        return {"type": "set_answer", "answer": answer}
 
-    # ── PART 1 ──────────────────────────────────────────────────────────────
-    steps += [
-        s("Questions 1 - 2: Read a text aloud", _PART1_INTRO),
-        t(_PART1_INTRO),
-    ]
-    for i, item in enumerate((questions.get("part1") or [])[:2], 1):
+    def rs(hint):
+        return {"type": "record_start",
+                "subdir": f"records/set_{set_id}",
+                "hint":   hint}
+
+    rs_stop = {"type": "record_stop"}
+    PREP, RESP = "Preparation Time", "Response Time"
+    steps: list[dict] = []
+
+    # ── PART 1 ───────────────────────────────────────────────────────────────
+    steps += [scr("Questions 1 - 2: Read a text aloud", _PART1_INTRO), t(_PART1_INTRO)]
+    for i, item in enumerate((set_data.get("part1") or [])[:2], 1):
         steps += [
-            s(f"Question {i} of 11", item.get("text", "")),
+            scr(f"Question {i} of 11", item.get("text", ""), answer=item.get("answer", "")),
             t(_BEGIN_PREPARING),
             tm(45, PREP),
             t(_BEGIN_READING),
+            rs(f"p1_q{i}"),
             tm(45, RESP),
+            rs_stop,
         ]
 
-    # ── PART 2 ──────────────────────────────────────────────────────────────
-    steps += [
-        s("Questions 3 - 4: Describe a picture", _PART2_INTRO),
-        t(_PART2_INTRO),
-    ]
-    for i, item in enumerate((questions.get("part2") or [])[:2], 3):
-        raw_path = item.get("image", "")
-        img_path = raw_path if os.path.isabs(raw_path) else os.path.join(base_dir, raw_path)
+    # ── PART 2 ───────────────────────────────────────────────────────────────
+    steps += [scr("Questions 3 - 4: Describe a picture", _PART2_INTRO), t(_PART2_INTRO)]
+    for i, item in enumerate((set_data.get("part2") or [])[:2], 3):
+        raw = item.get("image", "")
+        img = raw if os.path.isabs(raw) else os.path.join(base_dir, raw)
         steps += [
-            s(f"Question {i} of 11", image=img_path),
+            scr(f"Question {i} of 11", image=img, answer=item.get("answer", "")),
             t(_BEGIN_PREPARING),
             tm(45, PREP),
             t(_BEGIN_SPEAKING),
+            rs(f"p2_q{i}"),
             tm(30, RESP),
+            rs_stop,
         ]
 
-    # ── PART 3 ──────────────────────────────────────────────────────────────
-    steps += [
-        s("Questions 5 - 7: Respond to questions", _PART3_INTRO),
-        t(_PART3_INTRO),
-    ]
-    p3   = questions.get("part3") or {}
+    # ── PART 3 ───────────────────────────────────────────────────────────────
+    steps += [scr("Questions 5 - 7: Respond to questions", _PART3_INTRO), t(_PART3_INTRO)]
+    p3   = set_data.get("part3") or {}
     bg   = p3.get("background", "")
     p3qs = (p3.get("questions") or [])[:3]
-
-    steps += [
-        s("Questions 5 - 7 of 11", bg),
-        t(bg),
-    ]
-    for idx, (q_num, duration) in enumerate([(5, 15), (6, 15), (7, 30)]):
+    steps += [scr("Questions 5 - 7 of 11", bg), t(bg)]
+    for idx, (q_num, dur) in enumerate([(5, 15), (6, 15), (7, 30)]):
         if idx < len(p3qs):
             qt = p3qs[idx].get("text", "")
+            ans = p3qs[idx].get("answer", "")
             steps += [
                 {"type": "screen", "title": f"Question {q_num} of 11",
-                 "content": bg, "secondary": qt, "image": ""},
-                t(qt),
-                t(_BEGIN_PREPARING),
-                tm(3, PREP),
-                t(_BEGIN_SPEAKING),
-                tm(duration, RESP),
+                 "content": bg, "secondary": qt, "image": "", "answer": ans},
+                t(qt), t(_BEGIN_PREPARING), tm(3, PREP), t(_BEGIN_SPEAKING),
+                rs(f"p3_q{q_num}"), tm(dur, RESP), rs_stop,
             ]
 
-    # ── PART 4 ──────────────────────────────────────────────────────────────
+    # ── PART 4 ───────────────────────────────────────────────────────────────
     steps += [
-        s("Questions 8 - 10: Respond to questions using information provided",
-          _PART4_INTRO),
+        scr("Questions 8 - 10: Respond to questions using information provided",
+            _PART4_INTRO),
         t(_PART4_INTRO),
     ]
-    p4   = questions.get("part4") or {}
+    p4   = set_data.get("part4") or {}
     info = p4.get("info", "")
     p4qs = (p4.get("questions") or [])[:3]
-
-    steps += [
-        s("Questions 8 \u2013 10 of 11", info),
-        t(_BEGIN_PREPARING),
-        tm(45, PREP),
-    ]
-    for idx, (q_num, duration) in enumerate([(8, 15), (9, 15), (10, 30)]):
+    steps += [scr("Questions 8 \u2013 10 of 11", info), t(_BEGIN_PREPARING), tm(45, PREP)]
+    for idx, (q_num, dur) in enumerate([(8, 15), (9, 15), (10, 30)]):
         if idx < len(p4qs):
-            qt = p4qs[idx].get("text", "")
+            qt  = p4qs[idx].get("text", "")
+            ans = p4qs[idx].get("answer", "")
             plays = [t(qt), t(qt)] if q_num == 10 else [t(qt)]
-            steps += plays + [
-                t(_BEGIN_PREPARING),
-                tm(3, PREP),
-                t(_BEGIN_SPEAKING),
-                tm(duration, RESP),
+            steps += [sa(ans)] + plays + [
+                t(_BEGIN_PREPARING), tm(3, PREP), t(_BEGIN_SPEAKING),
+                rs(f"p4_q{q_num}"), tm(dur, RESP), rs_stop,
             ]
 
-    # ── PART 5 ──────────────────────────────────────────────────────────────
+    # ── PART 5 ───────────────────────────────────────────────────────────────
+    steps += [scr("Question 11: Express an opinion", _PART5_INTRO), t(_PART5_INTRO)]
+    p5   = set_data.get("part5") or {}
+    q11  = p5.get("text", "")
+    ans5 = p5.get("answer", "")
     steps += [
-        s("Question 11: Express an opinion", _PART5_INTRO),
-        t(_PART5_INTRO),
-    ]
-    q11 = (questions.get("part5") or {}).get("text", "")
-    steps += [
-        s("Question 11 of 11", q11),
-        t(q11),
-        t(_BEGIN_PREPARING),
-        tm(45, PREP),
-        t(_BEGIN_SPEAKING),
-        tm(60, RESP),
+        scr("Question 11 of 11", q11, answer=ans5),
+        t(q11), t(_BEGIN_PREPARING), tm(45, PREP), t(_BEGIN_SPEAKING),
+        rs("p5_q11"), tm(60, RESP), rs_stop,
     ]
 
     steps.append({"type": "end"})
     return steps
 
 
-# ──────────────────────────────────────────────
-#  Default questions (fallback if JSON missing)
-# ──────────────────────────────────────────────
-def _default_questions() -> dict:
-    return {
-        "part1": [
-            {"text": "Good morning, everyone. Welcome to the annual company meeting. "
-                     "Today we will discuss the financial results for the past year and "
-                     "our strategic plans for the upcoming year. Please take a seat and "
-                     "make sure your microphones are working properly."},
-            {"text": "Attention all passengers. Due to heavy rainfall this morning, "
-                     "the train service between Central Station and Riverside has been "
-                     "temporarily suspended. Replacement buses are available at Exit B. "
-                     "We apologize for any inconvenience this may cause."},
-        ],
-        "part2": [
-            {"image": "images/q3.jpg"},
-            {"image": "images/q4.jpg"},
-        ],
-        "part3": {
-            "background": (
-                "Directions: In this part of the test, you will answer three questions "
-                "based on the information below.\n\n"
-                "Imagine that a Canadian marketing firm is doing research in your area. "
-                "You have agreed to participate in a telephone interview about workplace "
-                "preferences."
-            ),
-            "questions": [
-                {"text": "How long have you been working in your current industry?"},
-                {"text": "What do you find most challenging about your job?"},
-                {"text": "If you could redesign your workplace to improve both "
-                         "productivity and employee well-being, what specific changes "
-                         "would you make, and how do you think those changes would "
-                         "benefit the team?"},
-            ],
-        },
-        "part4": {
-            "info": (
-                "Riverside Community Library — Spring Events Schedule\n\n"
-                "Date: Saturday, April 12\n"
-                "Venue: Riverside Community Library, 2nd Floor\n\n"
-                "10:00 AM  — Library Opens / Coffee & Welcome\n"
-                "10:30 AM  — Author Talk: Writing Your First Novel\n"
-                "12:00 PM  — Lunch Break (café on Ground Floor)\n"
-                "01:00 PM  — Children's Story Hour (Room 201)\n"
-                "02:30 PM  — Book Club Discussion: The Sea at Dawn\n"
-                "04:00 PM  — Panel: Local Poets & Writers\n"
-                "05:30 PM  — Raffle Draw & Closing"
-            ),
-            "questions": [
-                {"text": "What time does the library open and what is offered when it opens?"},
-                {"text": "Where can visitors get lunch, and at what time does the lunch break begin?"},
-                {"text": "A friend wants to attend but cannot arrive until one o'clock. "
-                         "Which events can she attend, and which would be best for someone "
-                         "who enjoys discussing books with other readers?"},
-            ],
-        },
-        "part5": {
-            "text": (
-                "Some companies require all employees to work in the office every day, "
-                "while others allow employees to work from home some or all of the time. "
-                "Which policy do you think is better for both the company and its employees? "
-                "Give specific reasons and examples to support your opinion."
-            )
-        },
-    }
+# ── Default bank (fallback) ──────────────────────────────────────────────────
+def _default_bank() -> dict:
+    return {"sets": [{"id": 1, "name": "Default Set",
+                      "part1": [
+                          {"text": "Good morning, everyone. Welcome to the annual company meeting. "
+                                   "Today we will discuss the financial results for the past year.",
+                           "answer": "Read clearly at a steady pace, emphasizing key figures and dates."},
+                          {"text": "Attention all passengers. The train service has been delayed "
+                                   "by approximately twenty minutes. We apologize for any inconvenience.",
+                           "answer": "Focus on clear pronunciation of numbers and apology phrases."},
+                      ],
+                      "part2": [
+                          {"image": "images/set1/q3.jpg",
+                           "answer": "Describe people, location, actions, and any objects in the foreground and background."},
+                          {"image": "images/set1/q4.jpg",
+                           "answer": "Comment on the setting, number of people, what they appear to be doing, and the mood."},
+                      ],
+                      "part3": {
+                          "background": "Imagine that a Canadian marketing firm is doing research. "
+                                        "You have agreed to participate in a telephone interview about workplace preferences.",
+                          "questions": [
+                              {"text": "How long have you been working in your current industry?",
+                               "answer": "I have been working in [industry] for [X] years. I started as a [role]..."},
+                              {"text": "What do you find most challenging about your job?",
+                               "answer": "The most challenging aspect is [challenge]. However, I manage it by [strategy]..."},
+                              {"text": "If you could redesign your workplace, what changes would you make and why?",
+                               "answer": "I would introduce [change 1] and [change 2] because they would improve [benefit]. "
+                                         "For example, flexible hours would increase productivity by allowing..."},
+                          ],
+                      },
+                      "part4": {
+                          "info": "Community Library — Spring Events\nDate: Saturday, April 12\n\n"
+                                  "10:00 AM — Library Opens / Welcome Coffee\n"
+                                  "10:30 AM — Author Talk: Writing Your First Novel\n"
+                                  "12:00 PM — Lunch Break\n"
+                                  "01:00 PM — Children's Story Hour (Room 201)\n"
+                                  "02:30 PM — Book Club Discussion\n"
+                                  "05:30 PM — Raffle Draw & Closing",
+                          "questions": [
+                              {"text": "What time does the library open and what is offered?",
+                               "answer": "The library opens at 10:00 AM with welcome coffee for attendees."},
+                              {"text": "Where can visitors get lunch and at what time?",
+                               "answer": "Visitors can get lunch at the café on the Ground Floor. The lunch break begins at 12:00 PM."},
+                              {"text": "A friend arrives at 1 PM. Which events can she attend, and which suits a book lover?",
+                               "answer": "She can attend Children's Story Hour, Book Club Discussion, Local Poets Panel, and the Raffle. "
+                                         "The Book Club Discussion at 2:30 PM would be best for someone who enjoys discussing books."},
+                          ],
+                      },
+                      "part5": {
+                          "text": "Some companies allow employees to work from home. "
+                                  "Which do you think is more effective: working in the office or at home? Give reasons.",
+                          "answer": "I believe working in the office is more effective because it facilitates collaboration. "
+                                    "For example, spontaneous meetings often lead to better ideas. "
+                                    "Additionally, a structured environment helps maintain focus and work-life balance.",
+                      }}]}
 
 
-# ──────────────────────────────────────────────
-#  ExamEngine
-# ──────────────────────────────────────────────
+# ── ExamEngine ───────────────────────────────────────────────────────────────
 class ExamEngine(QObject):
-    update_display = pyqtSignal(dict)   # {"title", "content", "secondary", "image"}
-    update_timer   = pyqtSignal(int, str)  # (seconds_remaining, phase_label); -1 = hide
-    exam_finished  = pyqtSignal()
+    # ── existing signals ──────────────────────────────────────────────────────
+    update_display  = pyqtSignal(dict)
+    update_timer    = pyqtSignal(int, str)
+    exam_finished   = pyqtSignal()
+    # ── new signals ───────────────────────────────────────────────────────────
+    answer_updated  = pyqtSignal(str)         # current question answer text
+    skip_available  = pyqtSignal(bool)        # True = timer running → skip enabled
+    rec_start       = pyqtSignal(str, str)    # (subdir, hint)
+    rec_stop        = pyqtSignal()
 
     def __init__(self, base_dir: str):
         super().__init__()
-        self._base_dir = base_dir
-        self._questions: dict = {}
+        self._base_dir   = base_dir
+        self._bank: dict = {}
+        self._set_data: Optional[dict] = None
 
         self.tts = TTSManager()
         self.tts.finished.connect(self._advance)
@@ -271,37 +252,75 @@ class ExamEngine(QObject):
         self._countdown.setInterval(1000)
         self._countdown.timeout.connect(self._tick)
         self._remaining = 0
-        self._phase = ""
+        self._phase     = ""
 
         self._steps: list[dict] = []
         self._idx = 0
 
-        self._load_questions()
+        self._load_bank()
 
-    # ── public ──────────────────────────────────────────────────────────────
+    # ── public API ────────────────────────────────────────────────────────────
+    @property
+    def sets(self) -> list[dict]:
+        """Return [{id, name}, ...] for the set-selection UI."""
+        return [{"id": s.get("id", i + 1), "name": s.get("name", f"套题 {i+1}")}
+                for i, s in enumerate(self._bank.get("sets", []))]
+
+    def load_set(self, set_id: int) -> None:
+        """Select the question set by id before calling start_exam()."""
+        for s in self._bank.get("sets", []):
+            if s.get("id") == set_id:
+                self._set_data = s
+                print(f"[Engine] Loaded set {set_id}: {s.get('name', '')}")
+                return
+        print(f"[Engine] Set {set_id} not found.")
+
     def start_exam(self) -> None:
         self._countdown.stop()
-        self._steps = _build_steps(self._questions, self._base_dir)
-        self._idx = 0
+        if self._set_data is None and self._bank.get("sets"):
+            self._set_data = self._bank["sets"][0]
+        if self._set_data is None:
+            self._set_data = _default_bank()["sets"][0]
+
+        sid = self._set_data.get("id", 1)
+        self._steps = _build_steps(self._set_data, sid, self._base_dir)
+        self._idx   = 0
         self._run()
 
-    # ── private ─────────────────────────────────────────────────────────────
-    def _load_questions(self) -> None:
-        path = os.path.join(self._base_dir, "questions.json")
-        try:
-            with open(path, encoding="utf-8") as f:
-                self._questions = json.load(f)
-            print(f"[Engine] Loaded questions from {path}")
-        except Exception as exc:
-            print(f"[Engine] Could not load questions.json ({exc}); using defaults.")
-            self._questions = _default_questions()
+    def skip(self) -> None:
+        """Stop current countdown and advance to the next step."""
+        if self._countdown.isActive():
+            self._countdown.stop()
+            self.update_timer.emit(0, self._phase)
+            self.skip_available.emit(False)
+            self.rec_stop.emit()
+            self._advance()
+
+    # ── private ───────────────────────────────────────────────────────────────
+    def _load_bank(self) -> None:
+        for fname in ("question_bank.json", "questions.json"):
+            path = os.path.join(self._base_dir, fname)
+            if os.path.isfile(path):
+                try:
+                    with open(path, encoding="utf-8") as f:
+                        raw = json.load(f)
+                    # Detect old single-set format (has "part1" key at top level)
+                    if "part1" in raw and "sets" not in raw:
+                        raw = {"sets": [dict(raw, id=1, name="套题 1")]}
+                    self._bank = raw
+                    print(f"[Engine] Loaded {fname} ({len(self._bank.get('sets', []))} sets)")
+                    return
+                except Exception as exc:
+                    print(f"[Engine] Error loading {fname}: {exc}")
+        print("[Engine] No question file found; using built-in defaults.")
+        self._bank = _default_bank()
 
     def _run(self) -> None:
         if self._idx >= len(self._steps):
             self.exam_finished.emit()
             return
 
-        step = self._steps[self._idx]
+        step  = self._steps[self._idx]
         stype = step.get("type")
 
         if stype == "screen":
@@ -312,18 +331,37 @@ class ExamEngine(QObject):
                 "image":     step.get("image", ""),
             })
             self.update_timer.emit(-1, "")
-            QTimer.singleShot(50, self._advance)   # let Qt paint before next step
+            self.skip_available.emit(False)
+            ans = step.get("answer", "")
+            if ans is not None:
+                self.answer_updated.emit(ans)
+            QTimer.singleShot(50, self._advance)
 
         elif stype == "tts":
+            self.skip_available.emit(False)
             self.tts.speak(step.get("text", ""))
 
         elif stype == "timer":
             self._phase     = step.get("phase", "")
             self._remaining = step.get("duration", 0)
             self.update_timer.emit(self._remaining, self._phase)
+            self.skip_available.emit(True)
             self._countdown.start()
 
+        elif stype == "set_answer":
+            self.answer_updated.emit(step.get("answer", ""))
+            QTimer.singleShot(0, self._advance)
+
+        elif stype == "record_start":
+            self.rec_start.emit(step.get("subdir", "records"), step.get("hint", "resp"))
+            QTimer.singleShot(0, self._advance)
+
+        elif stype == "record_stop":
+            self.rec_stop.emit()
+            QTimer.singleShot(0, self._advance)
+
         elif stype == "end":
+            self.skip_available.emit(False)
             self.exam_finished.emit()
 
     def _advance(self) -> None:
@@ -335,6 +373,7 @@ class ExamEngine(QObject):
         if self._remaining <= 0:
             self._countdown.stop()
             self.update_timer.emit(0, self._phase)
+            self.skip_available.emit(False)
             self._advance()
         else:
             self.update_timer.emit(self._remaining, self._phase)
