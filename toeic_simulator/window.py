@@ -581,8 +581,8 @@ class MainWindow(QMainWindow):
         """
         dlg = QDialog(self)
         dlg.setWindowTitle("参考答案")
-        dlg.setMinimumWidth(540)        # resizable; wider default
-        dlg.resize(560, 260)            # initial size — user can drag to resize
+        dlg.setMinimumWidth(800)
+        dlg.resize(800, 360)
         dlg.setWindowFlags(
             dlg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )

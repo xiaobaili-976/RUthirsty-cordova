@@ -26,7 +26,7 @@ def main():
     app.setStyleSheet("""
         QToolTip {
             background: transparent;
-            color: #000000;
+            color: #FFFFFF;
             border: none;
             font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", sans-serif;
             font-size: 12px;
