@@ -10,9 +10,10 @@ else:
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 
-from engine   import ExamEngine
-from recorder import RecorderManager
-from window   import MainWindow
+from engine          import ExamEngine
+from recorder        import RecorderManager
+from window          import MainWindow
+from license_manager import LicenseManager
 
 
 def main():
@@ -34,10 +35,11 @@ def main():
         }
     """)
 
-    engine   = ExamEngine(BASE_DIR)
-    recorder = RecorderManager(BASE_DIR)
+    engine      = ExamEngine(BASE_DIR)
+    recorder    = RecorderManager(BASE_DIR)
+    license_mgr = LicenseManager(BASE_DIR)
 
-    win = MainWindow(engine, recorder)
+    win = MainWindow(engine, recorder, license_mgr)
     win.show()
 
     sys.exit(app.exec())
