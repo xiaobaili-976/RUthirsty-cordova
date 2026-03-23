@@ -246,13 +246,14 @@ class ExamEngine(QObject):
         self._set_data: Optional[dict] = None
 
         self.tts = TTSManager()
-        self.tts.finished.connect(self._advance)
+        self.tts.finished.connect(self._on_tts_done)
 
         self._countdown = QTimer(self)
         self._countdown.setInterval(1000)
         self._countdown.timeout.connect(self._tick)
-        self._remaining = 0
-        self._phase     = ""
+        self._remaining  = 0
+        self._phase      = ""
+        self._tts_skipped = False           # True = skip() fired during TTS
 
         self._steps: list[dict] = []
         self._idx = 0
@@ -288,13 +289,34 @@ class ExamEngine(QObject):
         self._run()
 
     def skip(self) -> None:
-        """Stop current countdown and advance to the next step."""
+        """
+        Skip the current step immediately (Method 2 — full unlock).
+        • Timer active  → stop countdown, advance on next event-loop tick
+        • TTS active    → interrupt TTS, mark skipped, advance after 100 ms buffer
+        """
+        self.skip_available.emit(False)
+        self.rec_stop.emit()
+
         if self._countdown.isActive():
+            # ── timer phase ──────────────────────────────────────────────────
             self._countdown.stop()
             self.update_timer.emit(0, self._phase)
-            self.skip_available.emit(False)
-            self.rec_stop.emit()
-            self._advance()
+            QTimer.singleShot(0, self._advance)
+        else:
+            # ── TTS phase ────────────────────────────────────────────────────
+            # Mark as skipped so _on_tts_done ignores the pending finished signal
+            self._tts_skipped = True
+            self.tts.interrupt()
+            # 100 ms buffer: lets the audio thread fully release before advancing
+            QTimer.singleShot(100, self._advance)
+
+    def abort(self) -> None:
+        """Abort exam immediately (user pressed Home button)."""
+        self._countdown.stop()
+        self._tts_skipped = True
+        self.tts.interrupt()
+        self.skip_available.emit(False)
+        self.update_timer.emit(-1, "")
 
     # ── private ───────────────────────────────────────────────────────────────
     def _load_bank(self) -> None:
@@ -338,7 +360,8 @@ class ExamEngine(QObject):
             QTimer.singleShot(50, self._advance)
 
         elif stype == "tts":
-            self.skip_available.emit(False)
+            self._tts_skipped = False
+            self.skip_available.emit(True)   # skip allowed during TTS (opt-2 unlock)
             self.tts.speak(step.get("text", ""))
 
         elif stype == "timer":
@@ -367,6 +390,13 @@ class ExamEngine(QObject):
     def _advance(self) -> None:
         self._idx += 1
         self._run()
+
+    def _on_tts_done(self) -> None:
+        """Called when TTS finishes — ignored if skip() was called first."""
+        if self._tts_skipped:
+            self._tts_skipped = False   # reset for next TTS step
+            return
+        self._advance()
 
     def _tick(self) -> None:
         self._remaining -= 1

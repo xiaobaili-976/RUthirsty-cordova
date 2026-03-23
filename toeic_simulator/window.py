@@ -1,37 +1,40 @@
 """
-Main window — PyQt6 UI for TOEIC Speaking Test Simulator (v2).
+Main window — PyQt6 UI for TOEIC Speaking Test Simulator (v3).
 
-Pages (QStackedWidget)
-──────────────────────
-  0 — Set-selection page    (choose which question set to practice)
-  1 — Exam page             (PART 1-5, with Skip + Answer buttons)
-  2 — End page              (completion summary + restart)
-
-New exam-page elements
-──────────────────────
-  • Skip button  — timer bar right side; enabled only when timer is active
-  • Answer button — small "?" in header bar; shows current question's answer
-  • REC indicator — pulsing red dot in header while microphone is recording
-  • Answer dialog  — semi-transparent overlay panel (QDialog-less)
+Changes vs v2
+─────────────
+  • [OPT-1] Answer dialog: Calibri 14 pt, 1.5 × line-height, 10 px padding,
+            dark-gray text (#333), light near-white background — no harsh borders.
+  • [OPT-2] Header redundant timer removed; single canonical timer lives in the
+            bottom timer-bar only.
+  • [OPT-3] Home button (⌂) added to header, same size as "?" button, 8 px gap,
+            tooltip "返回主页". Click: saves recording, aborts exam, returns to
+            set-selection page.
+  • [OPT-4] Answer "?" button now has consistent tooltip "参考答案" (was already
+            present but now guaranteed visible via Qt.ToolTipRole).
+  • [OPT-5] Skip button always enabled during exam (engine emits skip_available=True
+            for both timer AND TTS steps; Method-2 interrupt logic in engine/tts).
 """
+import os
+
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFrame, QScrollArea,
     QStackedWidget, QSizePolicy, QListWidget, QListWidgetItem,
     QDialog, QTextEdit, QMessageBox,
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSlot
 from PyQt6.QtGui import QFont, QPixmap, QResizeEvent
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 _BLUE   = "#003087"
 _GOLD   = "#FFD700"
-_RED    = "#CC0000"
 _BG     = "#FFFFFF"
 _LIGHT  = "#F5F7FA"
 _BORDER = "#DDE3EE"
 _HI     = "#EEF3FF"
 
+# ── Shared button styles ──────────────────────────────────────────────────────
 _BTN = f"""
 QPushButton {{
     background:{_BLUE}; color:white;
@@ -61,23 +64,31 @@ QPushButton {
 QPushButton:hover   { background:#333; }
 QPushButton:disabled{ background:#BBB; color:#888; }
 """
-_ANS_BTN = """
+# [OPT-3/4] Unified header icon-button style — home + answer use identical sizes.
+_HDR_BTN = """
 QPushButton {
-    background:transparent; color:#BBDDFF;
-    font-size:13px; font-weight:bold;
-    padding:2px 6px; border-radius:4px;
+    background: transparent;
+    color: #BBDDFF;
+    font-size: 15px;
+    font-weight: bold;
+    padding: 3px 5px;
+    border-radius: 4px;
     border: 1px solid #4477AA;
-    min-width:26px; max-width:30px;
+    min-width:  30px;
+    max-width:  30px;
+    min-height: 30px;
+    max-height: 30px;
 }
-QPushButton:hover { background:#0044B3; color:white; }
+QPushButton:hover   { background: #0044B3; color: white; }
+QPushButton:pressed { background: #002060; }
 """
 
 
 class MainWindow(QMainWindow):
     def __init__(self, engine, recorder):
         super().__init__()
-        self._engine   = engine
-        self._recorder = recorder
+        self._engine         = engine
+        self._recorder       = recorder
         self._current_answer = ""
         self._is_recording   = False
 
@@ -124,29 +135,33 @@ class MainWindow(QMainWindow):
 
         # REC indicator
         self._rec_dot = QLabel("● REC")
-        self._rec_dot.setStyleSheet("color:#FF4444; font-size:13px; font-weight:bold;")
+        self._rec_dot.setStyleSheet(
+            "color:#FF4444; font-size:13px; font-weight:bold;"
+        )
         self._rec_dot.hide()
         lay.addWidget(self._rec_dot)
-        lay.addSpacing(10)
+        lay.addSpacing(14)
 
-        # Answer button (subtle "?")
+        # [OPT-3] Home button — ⌂ icon, same size as answer button
+        self._home_btn = QPushButton("\u2302")    # U+2302 HOUSE
+        self._home_btn.setStyleSheet(_HDR_BTN)
+        self._home_btn.setToolTip("返回主页")
+        self._home_btn.clicked.connect(self._on_home)
+        self._home_btn.hide()
+        lay.addWidget(self._home_btn)
+
+        lay.addSpacing(8)                         # [OPT-3] 8 px between buttons
+
+        # [OPT-4] Answer button — "?" icon, same size as home button
         self._ans_btn = QPushButton("?")
-        self._ans_btn.setStyleSheet(_ANS_BTN)
-        self._ans_btn.setToolTip("查看参考答案")
+        self._ans_btn.setStyleSheet(_HDR_BTN)
+        self._ans_btn.setToolTip("参考答案")
         self._ans_btn.clicked.connect(self._show_answer)
         self._ans_btn.hide()
         lay.addWidget(self._ans_btn)
-        lay.addSpacing(12)
 
-        # Timer display
-        self._hdr_timer = QLabel("")
-        self._hdr_timer.setStyleSheet(
-            f"color:{_GOLD}; font-size:22px; font-weight:bold; min-width:110px;"
-        )
-        self._hdr_timer.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
-        )
-        lay.addWidget(self._hdr_timer)
+        lay.addSpacing(12)
+        # [OPT-2] _hdr_timer REMOVED — canonical timer is in the bottom bar only.
         return hdr
 
     # ── Set-selection page ────────────────────────────────────────────────────
@@ -173,18 +188,11 @@ class MainWindow(QMainWindow):
         self._set_list.setStyleSheet(f"""
             QListWidget {{
                 border:2px solid {_BORDER}; border-radius:8px;
-                font-size:17px; padding:6px;
-                background:white;
+                font-size:17px; padding:6px; background:white;
             }}
-            QListWidget::item {{
-                padding:12px 20px; border-radius:6px;
-            }}
-            QListWidget::item:selected {{
-                background:{_BLUE}; color:white;
-            }}
-            QListWidget::item:hover:!selected {{
-                background:{_HI};
-            }}
+            QListWidget::item {{ padding:12px 20px; border-radius:6px; }}
+            QListWidget::item:selected {{ background:{_BLUE}; color:white; }}
+            QListWidget::item:hover:!selected {{ background:{_HI}; }}
         """)
         self._set_list.setMinimumHeight(200)
         self._set_list.itemDoubleClicked.connect(lambda _: self._on_confirm_set())
@@ -218,7 +226,7 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(52, 32, 52, 0)
         lay.setSpacing(0)
 
-        # Question title line
+        # Question title
         self._q_title = QLabel("")
         self._q_title.setStyleSheet(
             f"font-size:21px; font-weight:bold; color:{_BLUE};"
@@ -232,14 +240,18 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._content_stack, 1)
 
         # — text page —
-        tp    = QWidget()
-        tp_l  = QVBoxLayout(tp)
+        tp   = QWidget()
+        tp_l = QVBoxLayout(tp)
         tp_l.setContentsMargins(0, 0, 0, 0)
         self._text_lbl = QLabel("")
         self._text_lbl.setStyleSheet("font-size:19px; color:#111; line-height:1.8;")
         self._text_lbl.setWordWrap(True)
-        self._text_lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self._text_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._text_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
+        self._text_lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         sc = QScrollArea()
         sc.setWidget(self._text_lbl)
         sc.setWidgetResizable(True)
@@ -252,8 +264,12 @@ class MainWindow(QMainWindow):
         ip_l.setContentsMargins(0, 0, 0, 0)
         self._img_lbl = QLabel()
         self._img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._img_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self._img_lbl.setStyleSheet(f"border:1px solid {_BORDER}; background:#fafafa;")
+        self._img_lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self._img_lbl.setStyleSheet(
+            f"border:1px solid {_BORDER}; background:#fafafa;"
+        )
         ip_l.addWidget(self._img_lbl)
 
         self._content_stack.addWidget(tp)   # index 0
@@ -268,13 +284,15 @@ class MainWindow(QMainWindow):
         si = QVBoxLayout(self._sec_frame)
         si.setContentsMargins(18, 12, 18, 12)
         self._sec_lbl = QLabel("")
-        self._sec_lbl.setStyleSheet("font-size:17px; color:#333; font-style:italic;")
+        self._sec_lbl.setStyleSheet(
+            "font-size:17px; color:#333; font-style:italic;"
+        )
         self._sec_lbl.setWordWrap(True)
         si.addWidget(self._sec_lbl)
         self._sec_frame.hide()
         lay.addWidget(self._sec_frame)
 
-        # Timer bar (phase label + countdown + skip button)
+        # Timer bar: phase label | stretch | countdown | 20px | skip button
         tbar = QFrame()
         tbar.setFixedHeight(66)
         tbar.setStyleSheet(
@@ -288,6 +306,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._phase_lbl)
         tb.addStretch()
 
+        # [OPT-2] Sole canonical timer display lives here (header timer removed)
         self._countdown_lbl = QLabel("")
         self._countdown_lbl.setStyleSheet(
             f"font-size:34px; font-weight:bold; color:{_BLUE};"
@@ -296,10 +315,10 @@ class MainWindow(QMainWindow):
 
         tb.addSpacing(20)
 
-        # Skip button
+        # [OPT-5] Skip button — enabled for both timer AND TTS phases
         self._skip_btn = QPushButton("跳过 ▶▶")
         self._skip_btn.setStyleSheet(_SKIP_BTN)
-        self._skip_btn.setEnabled(False)
+        self._skip_btn.setEnabled(False)   # disabled until exam begins
         self._skip_btn.clicked.connect(self._engine.skip)
         tb.addWidget(self._skip_btn)
 
@@ -352,7 +371,7 @@ class MainWindow(QMainWindow):
         e.update_timer.connect(self._on_timer)
         e.exam_finished.connect(self._on_end)
         e.answer_updated.connect(self._on_answer_updated)
-        e.skip_available.connect(self._skip_btn.setEnabled)
+        e.skip_available.connect(self._skip_btn.setEnabled)   # [OPT-5]
         e.rec_start.connect(self._on_rec_start)
         e.rec_stop.connect(self._on_rec_stop)
 
@@ -379,21 +398,44 @@ class MainWindow(QMainWindow):
         set_id = items[0].data(Qt.ItemDataRole.UserRole)
         self._engine.load_set(set_id)
         self._current_answer = ""
-        self._pages.setCurrentIndex(1)   # exam page
+        # [OPT-3] show both header buttons when entering exam
+        self._home_btn.show()
         self._ans_btn.show()
+        self._pages.setCurrentIndex(1)
         self._engine.start_exam()
 
     def _on_restart(self):
-        self._hdr_timer.setText("")
+        """Return from end page to set-selection."""
+        self._home_btn.hide()
         self._ans_btn.hide()
         self._rec_dot.hide()
-        self._pages.setCurrentIndex(0)   # set-selection
+        self._pages.setCurrentIndex(0)
+
+    def _on_home(self):
+        """
+        [OPT-3] Home button handler — abort exam, save recording, return to
+        set-selection without any confirmation dialog.
+        """
+        # Stop recording first so the WAV is properly saved
+        if self._is_recording:
+            self._on_rec_stop()
+
+        # Abort the exam engine (stops timer / interrupts TTS)
+        self._engine.abort()
+
+        # Reset header controls
+        self._home_btn.hide()
+        self._ans_btn.hide()
+        self._rec_dot.hide()
+        self._countdown_lbl.setText("")
+        self._phase_lbl.setText("")
+        self._skip_btn.setEnabled(False)
+        self._pages.setCurrentIndex(0)
 
     def _on_end(self):
         self._rec_dot.hide()
+        self._home_btn.hide()
         self._ans_btn.hide()
-        self._hdr_timer.setText("")
-        # Build summary message
         set_name = ""
         items = self._set_list.selectedItems()
         if items:
@@ -403,9 +445,10 @@ class MainWindow(QMainWindow):
         if self._recorder and self._recorder.available and self._recorder._model:
             msg += "\n语音转写文本已同步保存（.txt 文件）。"
         elif self._recorder and self._recorder.available:
-            msg += "\n（提示：将 vosk 模型放入 model/ 文件夹可启用语音转文字功能）"
+            msg += ("\n（提示：将 vosk 模型放入 model/ 文件夹可启用"
+                    "语音转文字功能）")
         self._end_msg.setText(msg)
-        self._pages.setCurrentIndex(2)   # end page
+        self._pages.setCurrentIndex(2)
 
     @pyqtSlot(dict)
     def _on_display(self, data: dict):
@@ -429,10 +472,10 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int, str)
     def _on_timer(self, seconds: int, phase: str):
+        """[OPT-2] Timer updates only the bottom bar — no header label."""
         if seconds < 0:
             self._countdown_lbl.setText("")
             self._phase_lbl.setText("")
-            self._hdr_timer.setText("")
             return
 
         h, r = divmod(seconds, 3600)
@@ -442,11 +485,8 @@ class MainWindow(QMainWindow):
         danger = seconds <= 10
         self._countdown_lbl.setText(ts)
         self._countdown_lbl.setStyleSheet(
-            f"font-size:34px; font-weight:bold; color:{'#CC0000' if danger else _BLUE};"
-        )
-        self._hdr_timer.setText(ts)
-        self._hdr_timer.setStyleSheet(
-            f"color:{'#FF6060' if danger else _GOLD}; font-size:22px; font-weight:bold;"
+            f"font-size:34px; font-weight:bold; "
+            f"color:{'#CC0000' if danger else _BLUE};"
         )
         if phase:
             self._phase_lbl.setText(phase)
@@ -471,44 +511,92 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str, str)
     def _on_transcription(self, wav_path: str, text: str):
-        # Silent — just printed to console; could optionally show notification
         print(f"[Window] Transcript ready for {os.path.basename(wav_path)}")
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Answer overlay
+    # Answer dialog  [OPT-1]
     # ─────────────────────────────────────────────────────────────────────────
     def _show_answer(self):
+        """
+        [OPT-1] Calibri 14 pt · 1.5× line-height · 10 px inner padding
+                Dark-gray #333 text · Light near-white background · No harsh border
+        """
         dlg = QDialog(self)
         dlg.setWindowTitle("参考答案")
-        dlg.setMinimumWidth(540)
+        dlg.setMinimumWidth(560)
         dlg.setWindowFlags(
             dlg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )
-        dlg.setStyleSheet(f"""
-            QDialog {{ background:rgba(10,20,60,0.92); border-radius:10px; }}
-            QLabel  {{ color:#DDEEFF; font-size:15px; }}
-            QTextEdit {{ background:#0A1440; color:#DDEEFF; font-size:15px;
-                         border:1px solid #334477; border-radius:5px; }}
+        dlg.setStyleSheet("""
+            QDialog {
+                background: rgba(250, 252, 255, 0.97);
+                border-radius: 8px;
+            }
+            QLabel {
+                color: #555555;
+                font-size: 13px;
+            }
+            QTextEdit {
+                background: #FAFAFA;
+                border: 1px solid #DDDDDD;
+                border-radius: 5px;
+                color: #333333;
+                selection-background-color: #AACCEE;
+            }
+            QPushButton {
+                background: #003087; color: white;
+                font-size: 14px; font-weight: bold;
+                padding: 7px 28px; border-radius: 5px;
+            }
+            QPushButton:hover { background: #0044B3; }
         """)
+
         vb = QVBoxLayout(dlg)
-        vb.setContentsMargins(24, 20, 24, 16)
-        vb.setSpacing(12)
+        vb.setContentsMargins(20, 18, 20, 14)
+        vb.setSpacing(10)
 
-        lbl = QLabel("参考答案 / Reference Answer")
-        lbl.setStyleSheet(
-            f"color:{_GOLD}; font-size:16px; font-weight:bold;"
+        # Title label
+        title_lbl = QLabel("参考答案 / Reference Answer")
+        title_lbl.setStyleSheet(
+            f"color:{_BLUE}; font-size:15px; font-weight:bold;"
         )
-        vb.addWidget(lbl)
+        vb.addWidget(title_lbl)
 
+        # Answer text area — Calibri 14 pt, 1.5× line height via HTML
         te = QTextEdit()
         te.setReadOnly(True)
-        te.setMinimumHeight(160)
-        te.setText(self._current_answer if self._current_answer
-                   else "（本题暂无参考答案）")
+        te.setMinimumHeight(180)
+        te.document().setDocumentMargin(10)      # [OPT-1] 10 px internal padding
+
+        # Build HTML with Calibri font, 1.5 line-height, dark-gray color
+        raw = self._current_answer.strip() if self._current_answer else ""
+        if raw:
+            # Escape HTML entities and preserve newlines
+            import html as _html
+            escaped = _html.escape(raw).replace("\n", "<br>")
+            html_body = (
+                f'<p style="'
+                f'font-family: Calibri, Georgia, Arial, sans-serif;'
+                f'font-size: 14pt;'
+                f'color: #333333;'
+                f'line-height: 1.5;'
+                f'margin: 0;'
+                f'text-align: left;'
+                f'">{escaped}</p>'
+            )
+        else:
+            html_body = (
+                '<p style="'
+                'font-family: Calibri, Georgia, Arial, sans-serif;'
+                'font-size: 14pt; color: #888888; font-style: italic; '
+                'line-height: 1.5; margin: 0;">'
+                '（本题暂无参考答案）</p>'
+            )
+        te.setHtml(html_body)
+
         vb.addWidget(te)
 
         close = QPushButton("关闭")
-        close.setStyleSheet(_BTN_SM)
         close.clicked.connect(dlg.accept)
         vb.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
 
@@ -526,7 +614,8 @@ class MainWindow(QMainWindow):
         w = max(self._img_lbl.width() - 20, 600)
         h = max(self._img_lbl.height() - 20, 400)
         self._img_lbl.setPixmap(
-            pm.scaled(w, h, Qt.AspectRatioMode.KeepAspectRatio,
+            pm.scaled(w, h,
+                      Qt.AspectRatioMode.KeepAspectRatio,
                       Qt.TransformationMode.SmoothTransformation)
         )
 
@@ -534,6 +623,3 @@ class MainWindow(QMainWindow):
         super().resizeEvent(event)
         if self._content_stack.currentIndex() == 1 and self._current_image:
             self._load_image(self._current_image)
-
-
-import os   # noqa: E402  (needed for _on_transcription)
