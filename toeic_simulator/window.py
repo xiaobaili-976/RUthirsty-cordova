@@ -157,6 +157,14 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._populate_sets()
 
+        # Trial countdown timer — fires every 60 s, also called once immediately
+        from PyQt6.QtCore import QTimer as _QTimer
+        self._trial_timer = _QTimer(self)
+        self._trial_timer.setInterval(60_000)
+        self._trial_timer.timeout.connect(self._update_trial_label)
+        self._trial_timer.start()
+        self._update_trial_label()
+
     # ─────────────────────────────────────────────────────────────────────────
     # UI construction
     # ─────────────────────────────────────────────────────────────────────────
@@ -187,6 +195,14 @@ class MainWindow(QMainWindow):
         title = QLabel("TOEIC\u00ae Speaking Test Simulator")
         title.setStyleSheet("color:white; font-size:18px; font-weight:bold;")
         lay.addWidget(title)
+
+        # Trial countdown — small, muted, hidden when activated
+        self._trial_lbl = QLabel("")
+        self._trial_lbl.setStyleSheet(
+            "color: rgba(255,255,255,0.45); font-size:11px; padding-left:10px;"
+        )
+        lay.addWidget(self._trial_lbl)
+
         lay.addStretch()
 
         # REC indicator
@@ -425,9 +441,29 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────────────────────────────────
     # License guard
     # ─────────────────────────────────────────────────────────────────────────
-    def _require_license(self) -> bool:
-        """Return True if activated (or no manager). Otherwise show purchase dialog."""
+    def _update_trial_label(self):
+        """Refresh the header trial countdown. Called every minute and at startup."""
         if self._license is None or self._license.is_activated:
+            self._trial_lbl.hide()
+            return
+        secs = self._license.trial_remaining_seconds
+        if secs <= 0:
+            self._trial_lbl.hide()
+            return
+        days  = int(secs // 86400)
+        hours = int((secs % 86400) // 3600)
+        mins  = int((secs % 3600) // 60)
+        if days > 0:
+            text = f"试用剩余 {days}天{hours}时"
+        elif hours > 0:
+            text = f"试用剩余 {hours}时{mins}分"
+        else:
+            text = f"试用剩余 {mins}分钟"
+        self._trial_lbl.setText(text)
+        self._trial_lbl.show()
+    def _require_license(self) -> bool:
+        """Return True if can_use (activated or in trial). Otherwise show purchase dialog."""
+        if self._license is None or self._license.can_use:
             return True
         self._show_purchase_dialog()
         return False
@@ -464,6 +500,12 @@ class MainWindow(QMainWindow):
         hdr = QLabel("🔒  基础解锁版（永久授权）— ¥19.9")
         hdr.setStyleSheet(f"color:{_BLUE}; font-size:15px; font-weight:bold;")
         vb.addWidget(hdr)
+
+        # Show trial-expired notice if applicable
+        if self._license and self._license.trial_remaining_seconds <= 0:
+            expired_lbl = QLabel("⚠️  免费试用期已结束，请购买解锁继续使用。")
+            expired_lbl.setStyleSheet("color:#CC0000; font-size:13px;")
+            vb.addWidget(expired_lbl)
 
         desc = QLabel(
             "解锁题库练习、录音、参考答案查看、返回首页全部基础功能。\n"
