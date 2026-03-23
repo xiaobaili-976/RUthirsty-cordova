@@ -21,11 +21,11 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QFrame, QScrollArea,
     QStackedWidget, QSizePolicy, QListWidget, QListWidgetItem,
-    QDialog, QTextEdit, QMessageBox, QLineEdit, QInputDialog,
+    QDialog, QTextEdit, QMessageBox,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QPoint, QSize
 from PyQt6.QtGui import (
-    QFont, QPixmap, QResizeEvent, QKeyEvent,
+    QFont, QPixmap, QResizeEvent,
     QPainter, QPen, QPolygon, QBrush, QColor, QIcon,
 )
 
@@ -139,12 +139,10 @@ def _make_book_qicon() -> QIcon:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, engine, recorder, license_manager=None):
+    def __init__(self, engine, recorder):
         super().__init__()
         self._engine         = engine
         self._recorder       = recorder
-        self._license        = license_manager
-        self._base_dir       = engine._base_dir
         self._current_answer = ""
         self._is_recording   = False
 
@@ -156,14 +154,6 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._connect_signals()
         self._populate_sets()
-
-        # Trial countdown timer — fires every 60 s, also called once immediately
-        from PyQt6.QtCore import QTimer as _QTimer
-        self._trial_timer = _QTimer(self)
-        self._trial_timer.setInterval(60_000)
-        self._trial_timer.timeout.connect(self._update_trial_label)
-        self._trial_timer.start()
-        self._update_trial_label()
 
     # ─────────────────────────────────────────────────────────────────────────
     # UI construction
@@ -195,14 +185,6 @@ class MainWindow(QMainWindow):
         title = QLabel("TOEIC\u00ae Speaking Test Simulator")
         title.setStyleSheet("color:white; font-size:18px; font-weight:bold;")
         lay.addWidget(title)
-
-        # Trial countdown — small, muted, hidden when activated
-        self._trial_lbl = QLabel("")
-        self._trial_lbl.setStyleSheet(
-            "color: rgba(255,255,255,0.45); font-size:11px; padding-left:10px;"
-        )
-        lay.addWidget(self._trial_lbl)
-
         lay.addStretch()
 
         # REC indicator
@@ -439,190 +421,6 @@ class MainWindow(QMainWindow):
         return page
 
     # ─────────────────────────────────────────────────────────────────────────
-    # License guard
-    # ─────────────────────────────────────────────────────────────────────────
-    def _update_trial_label(self):
-        """Refresh the header trial countdown. Called every minute and at startup."""
-        if self._license is None or self._license.is_activated:
-            self._trial_lbl.hide()
-            return
-        secs = self._license.trial_remaining_seconds
-        if secs <= 0:
-            self._trial_lbl.hide()
-            return
-        days  = int(secs // 86400)
-        hours = int((secs % 86400) // 3600)
-        mins  = int((secs % 3600) // 60)
-        if days > 0:
-            text = f"试用剩余 {days}天{hours}时"
-        elif hours > 0:
-            text = f"试用剩余 {hours}时{mins}分"
-        else:
-            text = f"试用剩余 {mins}分钟"
-        self._trial_lbl.setText(text)
-        self._trial_lbl.show()
-    def _require_license(self) -> bool:
-        """Return True if can_use (activated or in trial). Otherwise show purchase dialog."""
-        if self._license is None or self._license.can_use:
-            return True
-        self._show_purchase_dialog()
-        return False
-
-    def _show_purchase_dialog(self):
-        dlg = QDialog(self)
-        dlg.setWindowTitle("购买解锁 — 基础版")
-        dlg.setMinimumWidth(450)
-        dlg.setWindowFlags(dlg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
-        dlg.setStyleSheet("""
-            QDialog  { background: #F8F8F8; border-radius: 8px; }
-            QLabel   { color: #333333; font-size: 13px; }
-            QLineEdit {
-                border: 1px solid #CCCCCC; border-radius: 4px;
-                padding: 4px 8px; font-size: 13px; background: white;
-            }
-            QPushButton {
-                background: #003087; color: white;
-                font-size: 13px; font-weight: bold;
-                padding: 5px 20px; border-radius: 5px;
-            }
-            QPushButton:hover { background: #0044B3; }
-            QPushButton#btn_close {
-                background: #777777;
-            }
-            QPushButton#btn_close:hover { background: #555555; }
-        """)
-
-        vb = QVBoxLayout(dlg)
-        vb.setContentsMargins(16, 14, 16, 12)
-        vb.setSpacing(10)
-
-        # ── Header ────────────────────────────────────────────────────────────
-        hdr = QLabel("🔒  基础解锁版（永久授权）— ¥19.9")
-        hdr.setStyleSheet(f"color:{_BLUE}; font-size:15px; font-weight:bold;")
-        vb.addWidget(hdr)
-
-        # Show trial-expired notice if applicable
-        if self._license and self._license.trial_remaining_seconds <= 0:
-            expired_lbl = QLabel("⚠️  免费试用期已结束，请购买解锁继续使用。")
-            expired_lbl.setStyleSheet("color:#CC0000; font-size:13px;")
-            vb.addWidget(expired_lbl)
-
-        desc = QLabel(
-            "解锁题库练习、录音、参考答案查看、返回首页全部基础功能。\n"
-            "付款后将机器码发给开发者，收到激活码后在下方输入即可永久解锁。"
-        )
-        desc.setWordWrap(True)
-        desc.setStyleSheet(
-            "font-family: 'Microsoft YaHei', 微软雅黑, sans-serif;"
-            "font-size: 13px; line-height: 1.5; color: #444;"
-        )
-        vb.addWidget(desc)
-
-        # ── QR codes ──────────────────────────────────────────────────────────
-        qr_row = QHBoxLayout()
-        qr_row.setSpacing(24)
-        qr_row.addStretch()
-        for fname, pay_name in [("wechat_pay.png", "微信支付"), ("alipay_pay.png", "支付宝")]:
-            col = QVBoxLayout()
-            col.setSpacing(4)
-            img_lbl = QLabel()
-            img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            pm = QPixmap(os.path.join(self._base_dir, fname))
-            if not pm.isNull():
-                img_lbl.setPixmap(
-                    pm.scaled(120, 120,
-                              Qt.AspectRatioMode.KeepAspectRatio,
-                              Qt.TransformationMode.SmoothTransformation)
-                )
-            else:
-                img_lbl.setText(f"[ {pay_name}收款码 ]")
-                img_lbl.setStyleSheet(
-                    "color:#999; font-size:12px;"
-                    "border:1px dashed #BBBBBB; padding:18px 10px;"
-                )
-            col.addWidget(img_lbl)
-            name_lbl = QLabel(pay_name)
-            name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            name_lbl.setStyleSheet("font-size:12px; color:#555;")
-            col.addWidget(name_lbl)
-            qr_row.addLayout(col)
-        qr_row.addStretch()
-        vb.addLayout(qr_row)
-
-        # ── Machine code ──────────────────────────────────────────────────────
-        mc = self._license.machine_code if self._license else "N/A"
-        mc_lbl = QLabel(f"付款备注：【机器码】{mc}")
-        mc_lbl.setStyleSheet(
-            "color:#CC0000; font-size:13px; font-weight:bold;"
-        )
-        mc_lbl.setTextInteractionFlags(
-            Qt.TextInteractionFlag.TextSelectableByMouse
-        )
-        vb.addWidget(mc_lbl)
-
-        # ── Separator ─────────────────────────────────────────────────────────
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("color:#DDDDDD;")
-        vb.addWidget(sep)
-
-        # ── Activation input ──────────────────────────────────────────────────
-        act_row = QHBoxLayout()
-        act_row.addWidget(QLabel("激活码："))
-        act_input = QLineEdit()
-        act_input.setPlaceholderText("BASE-XXXXXX000")
-        act_input.setMaxLength(14)
-        act_row.addWidget(act_input, 1)
-        vb.addLayout(act_row)
-
-        # ── Buttons ───────────────────────────────────────────────────────────
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        unlock_btn = QPushButton("解锁")
-        unlock_btn.clicked.connect(lambda: self._do_activate(dlg, act_input))
-        btn_row.addWidget(unlock_btn)
-        close_btn = QPushButton("关闭")
-        close_btn.setObjectName("btn_close")
-        close_btn.clicked.connect(dlg.reject)
-        btn_row.addWidget(close_btn)
-        vb.addLayout(btn_row)
-
-        dlg.exec()
-
-    def _do_activate(self, dlg: QDialog, act_input: QLineEdit):
-        code = act_input.text().strip().upper()
-        if self._license and self._license.activate(code):
-            QMessageBox.information(
-                dlg, "解锁成功",
-                "基础版已永久解锁！\n请重新点击功能按钮开始使用。"
-            )
-            dlg.accept()
-        else:
-            QMessageBox.warning(
-                dlg, "激活失败",
-                "激活码无效，请检查后重新输入。\n"
-                f"格式：BASE-{(self._license.machine_code[-6:] if self._license else 'XXXXXX')}NNN  （NNN为3位数字）"
-            )
-
-    # ── Developer shortcut: Ctrl+Shift+T ──────────────────────────────────────
-    def keyPressEvent(self, event: QKeyEvent):
-        if (event.key() == Qt.Key.Key_T
-                and event.modifiers() & Qt.KeyboardModifier.ControlModifier
-                and event.modifiers() & Qt.KeyboardModifier.ShiftModifier):
-            self._prompt_dev_unlock()
-        super().keyPressEvent(event)
-
-    def _prompt_dev_unlock(self):
-        pwd, ok = QInputDialog.getText(
-            self, "开发者模式", "请输入口令：",
-            QLineEdit.EchoMode.Password
-        )
-        if ok and self._license and self._license.enable_dev_mode(pwd):
-            QMessageBox.information(self, "开发者模式", "已启用开发者模式，所有基础功能已永久解锁。")
-        elif ok:
-            pass   # wrong password — silent
-
-    # ─────────────────────────────────────────────────────────────────────────
     # Signal wiring
     # ─────────────────────────────────────────────────────────────────────────
     def _connect_signals(self):
@@ -651,8 +449,6 @@ class MainWindow(QMainWindow):
             self._set_list.setCurrentRow(0)
 
     def _on_confirm_set(self):
-        if not self._require_license():
-            return
         items = self._set_list.selectedItems()
         if not items:
             QMessageBox.warning(self, "提示", "请先选择一套题目再开始考试。")
@@ -678,8 +474,6 @@ class MainWindow(QMainWindow):
         [OPT-3] Home button handler — abort exam, save recording, return to
         set-selection without any confirmation dialog.
         """
-        if not self._require_license():
-            return
         # Stop recording first so the WAV is properly saved
         if self._is_recording:
             self._on_rec_stop()
@@ -785,8 +579,6 @@ class MainWindow(QMainWindow):
         Answer popup — 450 px wide × ~180 px tall, #F8F8F8 background, 12 px padding.
         Calibri 14 pt · 1.5× line-height · #333333 text. No logic changes.
         """
-        if not self._require_license():
-            return
         dlg = QDialog(self)
         dlg.setWindowTitle("参考答案")
         dlg.setMinimumWidth(800)

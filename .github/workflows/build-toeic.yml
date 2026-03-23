@@ -42,7 +42,6 @@ jobs:
             --hidden-import "pyttsx3.drivers.nsss" `
             --hidden-import "pyttsx3.drivers.espeak" `
             --hidden-import "vosk" `
-            --add-data "license_manager.py;." `
             --collect-all PyQt6 `
             main.py
         working-directory: toeic_simulator
