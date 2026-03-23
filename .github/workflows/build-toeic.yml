@@ -47,6 +47,11 @@ jobs:
         working-directory: toeic_simulator
         shell: pwsh
 
+      - name: Generate question_bank.xlsx from JSON
+        run: python make_question_bank_xlsx.py
+        working-directory: toeic_simulator
+        shell: pwsh
+
       - name: Package release
         run: |
           New-Item -ItemType Directory -Path release\images\set1 -Force
@@ -54,17 +59,16 @@ jobs:
           New-Item -ItemType Directory -Path release\records      -Force
           New-Item -ItemType Directory -Path release\model        -Force
           Copy-Item dist\TOEIC_Speaking_Simulator.exe release\
-          Copy-Item question_bank.json release\
-          Copy-Item make_question_bank_xlsx.py release\
-          $readme = "TOEIC Speaking Test Simulator v3`r`n"
+          Copy-Item question_bank.xlsx release\
+          $readme = "TOEIC Speaking Test Simulator v4`r`n"
           $readme += "================================`r`n`r`n"
           $readme += "[Basic Usage]`r`n"
-          $readme += "1. Edit question_bank.xlsx (or question_bank.json) to add questions.`r`n"
-          $readme += "   Run: python make_question_bank_xlsx.py  to convert JSON -> xlsx.`r`n"
+          $readme += "1. Open question_bank.xlsx and edit questions / answers directly in Excel.`r`n"
+          $readme += "   Sheet layout: Sets | Part1 | Part2 | Part3 | Part4 | Part5`r`n"
           $readme += "2. Place PART 2 images in images\set1\, images\set2\ etc.`r`n"
           $readme += "3. Double-click TOEIC_Speaking_Simulator.exe to start.`r`n"
           $readme += "4. Select a question set and click Confirm to begin.`r`n"
-          $readme += "5. During exam: click Skip to skip timers; click i for answers.`r`n`r`n"
+          $readme += "5. During exam: click Skip to skip timers; click book icon for answers.`r`n`r`n"
           $readme += "[Recording + Speech-to-Text (optional)]`r`n"
           $readme += "- With a mic connected, responses are recorded automatically.`r`n"
           $readme += "- Audio saved to records\set_{id}\ folder.`r`n"
@@ -72,41 +76,41 @@ jobs:
           $readme += "  https://alphacephei.com/vosk/models, unzip as model\ folder.`r`n`r`n"
           $readme += "[Requirements] Windows 10/11 64-bit, no Python needed.`r`n"
           Set-Content -Path release\README.txt -Value $readme -Encoding utf8
-          Compress-Archive -Path release\* -DestinationPath TOEIC_Simulator_Windows_v3.zip
+          Compress-Archive -Path release\* -DestinationPath TOEIC_Simulator_Windows_v4.zip
         working-directory: toeic_simulator
         shell: pwsh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TOEIC_Simulator_Windows_v3
-          path: toeic_simulator/TOEIC_Simulator_Windows_v3.zip
+          name: TOEIC_Simulator_Windows_v4
+          path: toeic_simulator/TOEIC_Simulator_Windows_v4.zip
           retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v3.0.${{ github.run_number }}"
-          name: "TOEIC Speaking Simulator v3.0.${{ github.run_number }}"
+          tag_name: "v4.0.${{ github.run_number }}"
+          name: "TOEIC Speaking Simulator v4.0.${{ github.run_number }}"
           body: |
-            ## 托业口语考试模拟器 v3 — Windows EXE
+            ## 托业口语考试模拟器 v4 — Windows EXE
 
             ### 新增功能
-            - **Excel/CSV 导入题库** — 支持直接编辑 question_bank.xlsx，无需手改 JSON；包含转换工具 make_question_bank_xlsx.py
-            - **图标美化** — 标题栏按钮改为圆形半透明样式，更简约；答案按钮图标换为 ℹ
-            - **答案弹窗优化** — 窗口更窄（适配英文竖向阅读）、更高（默认显示更多内容）
+            - **自定义矢量图标** — 标题栏"小房子"与"书册"图标由 QPainter 精确绘制，Windows 扁平风格
+            - **全局悬停提示美化** — 微软雅黑 12px，浅灰背景 #F5F5F5，圆角 4px
+            - **参考答案弹窗** — 宽 450px 固定、初始高 ~180px，内边距 12px，背景 #F8F8F8
+            - **Excel 直接读取** — 发布包仅含 question_bank.xlsx，无需 JSON 或转换脚本
 
             ### 下载与使用
-            下载 `TOEIC_Simulator_Windows_v3.zip`，解压后：
-            1. 运行 `python make_question_bank_xlsx.py` 将现有 JSON 转为 Excel（一次性）
-            2. 之后直接编辑 `question_bank.xlsx` 管理题库
-            3. 将 PART 2 图片放入 `images\set1\`、`images\set2\` 等子文件夹
-            4. 双击 `TOEIC_Speaking_Simulator.exe` 启动
-            5. 可选：vosk 英文小模型放入 `model\` 启用语音转文字
+            下载 `TOEIC_Simulator_Windows_v4.zip`，解压后：
+            1. 用 Excel 打开 `question_bank.xlsx`，直接编辑各 Sheet 中的题目与答案
+            2. 将 PART 2 图片放入 `images\set1\`、`images\set2\` 等子文件夹
+            3. 双击 `TOEIC_Speaking_Simulator.exe` 启动
+            4. 可选：vosk 英文小模型放入 `model\` 启用语音转文字
                下载：https://alphacephei.com/vosk/models（推荐 vosk-model-small-en-us-0.15）
 
             ### 系统要求
             Windows 10 / 11（64位），无需安装 Python
-          files: toeic_simulator/TOEIC_Simulator_Windows_v3.zip
+          files: toeic_simulator/TOEIC_Simulator_Windows_v4.zip
           draft: false
           prerelease: false

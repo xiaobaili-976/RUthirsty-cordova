@@ -133,7 +133,9 @@ if __name__ == "__main__":
     if not os.path.isfile(json_src):
         sys.exit(f"Source not found: {json_src}")
 
-    if os.path.isfile(xlsx_dest):
+    # In CI (non-interactive) or when --force flag is passed, overwrite silently
+    force = "--force" in sys.argv or not sys.stdin.isatty()
+    if os.path.isfile(xlsx_dest) and not force:
         ans = input(f"{xlsx_dest} already exists.  Overwrite? [y/N] ").strip().lower()
         if ans != "y":
             sys.exit("Aborted.")

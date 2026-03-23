@@ -23,8 +23,11 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QSizePolicy, QListWidget, QListWidgetItem,
     QDialog, QTextEdit, QMessageBox,
 )
-from PyQt6.QtCore import Qt, pyqtSlot
-from PyQt6.QtGui import QFont, QPixmap, QResizeEvent
+from PyQt6.QtCore import Qt, pyqtSlot, QPoint, QSize
+from PyQt6.QtGui import (
+    QFont, QPixmap, QResizeEvent,
+    QPainter, QPen, QPolygon, QBrush, QColor, QIcon,
+)
 
 # ── Palette ───────────────────────────────────────────────────────────────────
 _BLUE   = "#003087"
@@ -64,32 +67,75 @@ QPushButton {
 QPushButton:hover   { background:#333; }
 QPushButton:disabled{ background:#BBB; color:#888; }
 """
-# [OPT-3/4] Unified header icon-button style — home + answer use identical sizes.
-# Circular semi-transparent pill; softens against the dark-blue header.
+# [OPT-3/4] Unified header icon-button style — flat, transparent container.
+# White QPainter icons render crisply on the dark-blue header.
 _HDR_BTN = """
 QPushButton {
-    background: rgba(255, 255, 255, 0.13);
-    color: rgba(255, 255, 255, 0.88);
-    font-size: 16px;
-    font-weight: normal;
-    padding: 0px;
+    background: transparent;
+    border: none;
+    padding: 3px;
     border-radius: 15px;
-    border: 1.5px solid rgba(255, 255, 255, 0.28);
     min-width:  30px;
     max-width:  30px;
     min-height: 30px;
     max-height: 30px;
 }
-QPushButton:hover {
-    background: rgba(255, 255, 255, 0.28);
-    color: white;
-    border-color: rgba(255, 255, 255, 0.60);
-}
-QPushButton:pressed {
-    background: rgba(0, 0, 0, 0.18);
-    border-color: rgba(255, 255, 255, 0.20);
-}
+QPushButton:hover   { background: rgba(255, 255, 255, 0.18); }
+QPushButton:pressed { background: rgba(0,   0,   0,   0.15); }
 """
+_ICON_SZ = QSize(24, 24)   # icon canvas / display size
+
+
+def _make_home_qicon() -> QIcon:
+    """
+    House icon (24×24 canvas, 2 px white pen):
+      • Isosceles-triangle roof  — apex (12,2), base corners (1,11) / (23,11)
+      • Rectangular body         — (4,11) → (20,21)
+      • Door hint                — horizontal line at y=19, x 10–14
+    """
+    pm = QPixmap(24, 24)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor("#FFFFFF"), 2.0, Qt.PenStyle.SolidLine,
+               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    # Roof
+    p.drawPolygon(QPolygon([QPoint(12, 2), QPoint(1, 11), QPoint(23, 11)]))
+    # Body
+    p.drawRect(4, 11, 16, 10)
+    # Door (1-px horizontal line inside body)
+    p.drawLine(10, 19, 14, 19)
+    p.end()
+    return QIcon(pm)
+
+
+def _make_book_qicon() -> QIcon:
+    """
+    Book / reference icon (24×24 canvas, 2 px white pen):
+      • Rounded-rect shell  — 20×20, radius 4, origin (2,2)
+      • Right spine line    — x=16, y 6–18
+      • Two page lines      — x 5–15, at y=10 and y=14
+    """
+    from PyQt6.QtCore import QRectF
+    pm = QPixmap(24, 24)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor("#FFFFFF"), 2.0, Qt.PenStyle.SolidLine,
+               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    # Outer rounded rect
+    p.drawRoundedRect(QRectF(2, 2, 20, 20), 4, 4)
+    # Spine (right vertical)
+    p.drawLine(16, 6, 16, 18)
+    # Two page lines (horizontal)
+    p.drawLine(5, 10, 15, 10)
+    p.drawLine(5, 14, 15, 14)
+    p.end()
+    return QIcon(pm)
 
 
 class MainWindow(QMainWindow):
@@ -150,8 +196,10 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._rec_dot)
         lay.addSpacing(14)
 
-        # [OPT-3] Home button — ⌂ icon, same size as answer button
-        self._home_btn = QPushButton("\u2302")    # U+2302 HOUSE
+        # [OPT-3] Home button — house icon (QPainter-drawn), same size as answer button
+        self._home_btn = QPushButton()
+        self._home_btn.setIcon(_make_home_qicon())
+        self._home_btn.setIconSize(_ICON_SZ)
         self._home_btn.setStyleSheet(_HDR_BTN)
         self._home_btn.setToolTip("返回主页")
         self._home_btn.clicked.connect(self._on_home)
@@ -160,8 +208,10 @@ class MainWindow(QMainWindow):
 
         lay.addSpacing(8)                         # [OPT-3] 8 px between buttons
 
-        # [OPT-4] Answer button — ℹ icon (U+2139 information), same size as home button
-        self._ans_btn = QPushButton("\u2139")     # U+2139 INFORMATION SOURCE
+        # [OPT-4] Answer button — book icon (QPainter-drawn), same size as home button
+        self._ans_btn = QPushButton()
+        self._ans_btn.setIcon(_make_book_qicon())
+        self._ans_btn.setIconSize(_ICON_SZ)
         self._ans_btn.setStyleSheet(_HDR_BTN)
         self._ans_btn.setToolTip("参考答案")
         self._ans_btn.clicked.connect(self._show_answer)
@@ -526,19 +576,18 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────────────────────────────────
     def _show_answer(self):
         """
-        [OPT-1] Calibri 14 pt · 1.5× line-height · 10 px inner padding
-                Dark-gray #333 text · Light near-white background · No harsh border
+        Answer popup — 450 px wide × ~180 px tall, #F8F8F8 background, 12 px padding.
+        Calibri 14 pt · 1.5× line-height · #333333 text. No logic changes.
         """
         dlg = QDialog(self)
         dlg.setWindowTitle("参考答案")
-        dlg.setMinimumWidth(400)     # narrower — suits vertical English reading
-        dlg.setMinimumHeight(520)    # taller   — more answer text visible by default
+        dlg.setFixedWidth(450)          # fixed width — suits English column reading
         dlg.setWindowFlags(
             dlg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )
         dlg.setStyleSheet("""
             QDialog {
-                background: rgba(250, 252, 255, 0.97);
+                background: #F8F8F8;
                 border-radius: 8px;
             }
             QLabel {
@@ -546,7 +595,7 @@ class MainWindow(QMainWindow):
                 font-size: 13px;
             }
             QTextEdit {
-                background: #FAFAFA;
+                background: #F8F8F8;
                 border: 1px solid #DDDDDD;
                 border-radius: 5px;
                 color: #333333;
@@ -554,28 +603,28 @@ class MainWindow(QMainWindow):
             }
             QPushButton {
                 background: #003087; color: white;
-                font-size: 14px; font-weight: bold;
-                padding: 7px 28px; border-radius: 5px;
+                font-size: 13px; font-weight: bold;
+                padding: 5px 22px; border-radius: 5px;
             }
             QPushButton:hover { background: #0044B3; }
         """)
 
         vb = QVBoxLayout(dlg)
-        vb.setContentsMargins(20, 18, 20, 14)
-        vb.setSpacing(10)
+        vb.setContentsMargins(12, 12, 12, 10)   # 12 px inner padding
+        vb.setSpacing(8)
 
         # Title label
         title_lbl = QLabel("参考答案 / Reference Answer")
         title_lbl.setStyleSheet(
-            f"color:{_BLUE}; font-size:15px; font-weight:bold;"
+            f"color:{_BLUE}; font-size:14px; font-weight:bold;"
         )
         vb.addWidget(title_lbl)
 
         # Answer text area — Calibri 14 pt, 1.5× line height via HTML
         te = QTextEdit()
         te.setReadOnly(True)
-        te.setMinimumHeight(400)     # increased to fill the taller dialog
-        te.document().setDocumentMargin(10)      # [OPT-1] 10 px internal padding
+        te.setMinimumHeight(80)         # compact; scroll for long answers
+        te.document().setDocumentMargin(6)
 
         # Build HTML with Calibri font, 1.5 line-height, dark-gray color
         raw = self._current_answer.strip() if self._current_answer else ""
