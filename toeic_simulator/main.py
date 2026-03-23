@@ -1,4 +1,4 @@
-"""Entry point — TOEIC Speaking Test Simulator v2."""
+"""Entry point — TOEIC Speaking Test Simulator (Professional Edition)."""
 import sys
 import os
 
@@ -10,9 +10,13 @@ else:
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 
-from engine   import ExamEngine
-from recorder import RecorderManager
-from window   import MainWindow
+from engine           import ExamEngine
+from recorder         import RecorderManager
+from window           import MainWindow
+from license_manager  import LicenseManager
+from mistake_book     import MistakeBook
+from score_analyzer   import ScoreAnalyzer
+from template_manager import TemplateManager
 
 
 def main():
@@ -34,10 +38,20 @@ def main():
         }
     """)
 
-    engine   = ExamEngine(BASE_DIR)
-    recorder = RecorderManager(BASE_DIR)
+    engine        = ExamEngine(BASE_DIR)
+    recorder      = RecorderManager(BASE_DIR)
+    license_mgr   = LicenseManager(BASE_DIR)
+    mistake_book  = MistakeBook(BASE_DIR)
+    score_analyzer = ScoreAnalyzer()
+    template_mgr  = TemplateManager(BASE_DIR)
 
-    win = MainWindow(engine, recorder)
+    win = MainWindow(
+        engine, recorder,
+        license_mgr=license_mgr,
+        mistake_book=mistake_book,
+        score_analyzer=score_analyzer,
+        template_mgr=template_mgr,
+    )
     win.show()
 
     sys.exit(app.exec())
