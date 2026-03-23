@@ -65,22 +65,30 @@ QPushButton:hover   { background:#333; }
 QPushButton:disabled{ background:#BBB; color:#888; }
 """
 # [OPT-3/4] Unified header icon-button style — home + answer use identical sizes.
+# Circular semi-transparent pill; softens against the dark-blue header.
 _HDR_BTN = """
 QPushButton {
-    background: transparent;
-    color: #BBDDFF;
-    font-size: 15px;
-    font-weight: bold;
-    padding: 3px 5px;
-    border-radius: 4px;
-    border: 1px solid #4477AA;
+    background: rgba(255, 255, 255, 0.13);
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 16px;
+    font-weight: normal;
+    padding: 0px;
+    border-radius: 15px;
+    border: 1.5px solid rgba(255, 255, 255, 0.28);
     min-width:  30px;
     max-width:  30px;
     min-height: 30px;
     max-height: 30px;
 }
-QPushButton:hover   { background: #0044B3; color: white; }
-QPushButton:pressed { background: #002060; }
+QPushButton:hover {
+    background: rgba(255, 255, 255, 0.28);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.60);
+}
+QPushButton:pressed {
+    background: rgba(0, 0, 0, 0.18);
+    border-color: rgba(255, 255, 255, 0.20);
+}
 """
 
 
@@ -152,8 +160,8 @@ class MainWindow(QMainWindow):
 
         lay.addSpacing(8)                         # [OPT-3] 8 px between buttons
 
-        # [OPT-4] Answer button — "?" icon, same size as home button
-        self._ans_btn = QPushButton("?")
+        # [OPT-4] Answer button — ℹ icon (U+2139 information), same size as home button
+        self._ans_btn = QPushButton("\u2139")     # U+2139 INFORMATION SOURCE
         self._ans_btn.setStyleSheet(_HDR_BTN)
         self._ans_btn.setToolTip("参考答案")
         self._ans_btn.clicked.connect(self._show_answer)
@@ -523,7 +531,8 @@ class MainWindow(QMainWindow):
         """
         dlg = QDialog(self)
         dlg.setWindowTitle("参考答案")
-        dlg.setMinimumWidth(560)
+        dlg.setMinimumWidth(400)     # narrower — suits vertical English reading
+        dlg.setMinimumHeight(520)    # taller   — more answer text visible by default
         dlg.setWindowFlags(
             dlg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )
@@ -565,7 +574,7 @@ class MainWindow(QMainWindow):
         # Answer text area — Calibri 14 pt, 1.5× line height via HTML
         te = QTextEdit()
         te.setReadOnly(True)
-        te.setMinimumHeight(180)
+        te.setMinimumHeight(400)     # increased to fill the taller dialog
         te.document().setDocumentMargin(10)      # [OPT-1] 10 px internal padding
 
         # Build HTML with Calibri font, 1.5 line-height, dark-gray color

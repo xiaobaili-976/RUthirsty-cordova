@@ -18,6 +18,7 @@ New public API (v2)
   start_exam()                         build steps & run
   skip()                               stop current timer, advance
 """
+import csv
 import json
 import os
 import sys
@@ -320,6 +321,33 @@ class ExamEngine(QObject):
 
     # ── private ───────────────────────────────────────────────────────────────
     def _load_bank(self) -> None:
+        # ── 1. Try Excel (.xlsx) ──────────────────────────────────────────────
+        xlsx_path = os.path.join(self._base_dir, "question_bank.xlsx")
+        if os.path.isfile(xlsx_path):
+            try:
+                bank = self._load_bank_from_excel(xlsx_path)
+                if bank.get("sets"):
+                    self._bank = bank
+                    print(f"[Engine] Loaded question_bank.xlsx "
+                          f"({len(self._bank['sets'])} sets)")
+                    return
+            except Exception as exc:
+                print(f"[Engine] Error loading question_bank.xlsx: {exc}")
+
+        # ── 2. Try CSV bundle (question_bank_sets.csv + part CSVs) ───────────
+        csv_sets = os.path.join(self._base_dir, "question_bank_sets.csv")
+        if os.path.isfile(csv_sets):
+            try:
+                bank = self._load_bank_from_csv(self._base_dir)
+                if bank.get("sets"):
+                    self._bank = bank
+                    print(f"[Engine] Loaded CSV bundle "
+                          f"({len(self._bank['sets'])} sets)")
+                    return
+            except Exception as exc:
+                print(f"[Engine] Error loading CSV bundle: {exc}")
+
+        # ── 3. Fall back to JSON ──────────────────────────────────────────────
         for fname in ("question_bank.json", "questions.json"):
             path = os.path.join(self._base_dir, fname)
             if os.path.isfile(path):
@@ -334,8 +362,206 @@ class ExamEngine(QObject):
                     return
                 except Exception as exc:
                     print(f"[Engine] Error loading {fname}: {exc}")
+
         print("[Engine] No question file found; using built-in defaults.")
         self._bank = _default_bank()
+
+    # ── Excel loader ──────────────────────────────────────────────────────────
+    def _load_bank_from_excel(self, path: str) -> dict:
+        """
+        Load question bank from a multi-sheet .xlsx file.
+
+        Expected sheet layout (column names in row 1):
+          Sets    : set_id | set_name
+          Part1   : set_id | text      | answer
+          Part2   : set_id | image     | answer
+          Part3   : set_id | background | question_text | answer
+                    (background filled only on the first row per set)
+          Part4   : set_id | info       | question_text | answer
+                    (info filled only on the first row per set)
+          Part5   : set_id | text       | answer
+        """
+        import openpyxl  # optional dependency — installed via requirements.txt
+        wb = openpyxl.load_workbook(path, data_only=True)
+
+        def _rows(sheet_name: str) -> list[dict]:
+            if sheet_name not in wb.sheetnames:
+                return []
+            ws = wb[sheet_name]
+            rows = list(ws.iter_rows(values_only=True))
+            if not rows:
+                return []
+            hdrs = [str(h).strip() if h is not None else "" for h in rows[0]]
+            return [
+                {hdrs[i]: (row[i] if i < len(row) else None)
+                 for i in range(len(hdrs))}
+                for row in rows[1:]
+                if any(c is not None for c in row)
+            ]
+
+        def _str(v) -> str:
+            return str(v).strip() if v is not None else ""
+
+        def _int(v) -> int:
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return 0
+
+        # ── Sets ─────────────────────────────────────────────────────────────
+        sets_map: dict[int, dict] = {}
+        for r in _rows("Sets"):
+            sid = _int(r.get("set_id"))
+            if sid:
+                sets_map[sid] = {
+                    "id":    sid,
+                    "name":  _str(r.get("set_name")) or f"套题 {sid}",
+                    "part1": [],
+                    "part2": [],
+                    "part3": {"background": "", "questions": []},
+                    "part4": {"info": "",       "questions": []},
+                    "part5": {"text": "",        "answer":   ""},
+                }
+
+        # ── Part 1 ───────────────────────────────────────────────────────────
+        for r in _rows("Part1"):
+            sid = _int(r.get("set_id"))
+            if sid in sets_map:
+                sets_map[sid]["part1"].append(
+                    {"text": _str(r.get("text")), "answer": _str(r.get("answer"))}
+                )
+
+        # ── Part 2 ───────────────────────────────────────────────────────────
+        for r in _rows("Part2"):
+            sid = _int(r.get("set_id"))
+            if sid in sets_map:
+                sets_map[sid]["part2"].append(
+                    {"image": _str(r.get("image")), "answer": _str(r.get("answer"))}
+                )
+
+        # ── Part 3 ───────────────────────────────────────────────────────────
+        for r in _rows("Part3"):
+            sid = _int(r.get("set_id"))
+            if sid not in sets_map:
+                continue
+            bg = _str(r.get("background"))
+            if bg:
+                sets_map[sid]["part3"]["background"] = bg
+            sets_map[sid]["part3"]["questions"].append(
+                {"text": _str(r.get("question_text")), "answer": _str(r.get("answer"))}
+            )
+
+        # ── Part 4 ───────────────────────────────────────────────────────────
+        for r in _rows("Part4"):
+            sid = _int(r.get("set_id"))
+            if sid not in sets_map:
+                continue
+            info = _str(r.get("info"))
+            if info:
+                sets_map[sid]["part4"]["info"] = info
+            sets_map[sid]["part4"]["questions"].append(
+                {"text": _str(r.get("question_text")), "answer": _str(r.get("answer"))}
+            )
+
+        # ── Part 5 ───────────────────────────────────────────────────────────
+        for r in _rows("Part5"):
+            sid = _int(r.get("set_id"))
+            if sid in sets_map:
+                sets_map[sid]["part5"] = {
+                    "text":   _str(r.get("text")),
+                    "answer": _str(r.get("answer")),
+                }
+
+        return {"sets": list(sets_map.values())}
+
+    # ── CSV bundle loader ─────────────────────────────────────────────────────
+    def _load_bank_from_csv(self, base_dir: str) -> dict:
+        """
+        Load question bank from a bundle of CSV files located in base_dir.
+
+        Files (UTF-8, with BOM support):
+          question_bank_sets.csv   — set_id, set_name
+          question_bank_part1.csv  — set_id, text, answer
+          question_bank_part2.csv  — set_id, image, answer
+          question_bank_part3.csv  — set_id, background, question_text, answer
+          question_bank_part4.csv  — set_id, info, question_text, answer
+          question_bank_part5.csv  — set_id, text, answer
+        """
+        def _read(fname: str) -> list[dict]:
+            p = os.path.join(base_dir, fname)
+            if not os.path.isfile(p):
+                return []
+            with open(p, encoding="utf-8-sig", newline="") as f:
+                return list(csv.DictReader(f))
+
+        def _s(d: dict, key: str) -> str:
+            return (d.get(key) or "").strip()
+
+        def _i(d: dict, key: str) -> int:
+            try:
+                return int((d.get(key) or "0").strip())
+            except ValueError:
+                return 0
+
+        sets_map: dict[int, dict] = {}
+        for r in _read("question_bank_sets.csv"):
+            sid = _i(r, "set_id")
+            if sid:
+                sets_map[sid] = {
+                    "id":    sid,
+                    "name":  _s(r, "set_name") or f"套题 {sid}",
+                    "part1": [],
+                    "part2": [],
+                    "part3": {"background": "", "questions": []},
+                    "part4": {"info": "",       "questions": []},
+                    "part5": {"text": "",        "answer":   ""},
+                }
+
+        for r in _read("question_bank_part1.csv"):
+            sid = _i(r, "set_id")
+            if sid in sets_map:
+                sets_map[sid]["part1"].append(
+                    {"text": _s(r, "text"), "answer": _s(r, "answer")}
+                )
+
+        for r in _read("question_bank_part2.csv"):
+            sid = _i(r, "set_id")
+            if sid in sets_map:
+                sets_map[sid]["part2"].append(
+                    {"image": _s(r, "image"), "answer": _s(r, "answer")}
+                )
+
+        for r in _read("question_bank_part3.csv"):
+            sid = _i(r, "set_id")
+            if sid not in sets_map:
+                continue
+            bg = _s(r, "background")
+            if bg:
+                sets_map[sid]["part3"]["background"] = bg
+            sets_map[sid]["part3"]["questions"].append(
+                {"text": _s(r, "question_text"), "answer": _s(r, "answer")}
+            )
+
+        for r in _read("question_bank_part4.csv"):
+            sid = _i(r, "set_id")
+            if sid not in sets_map:
+                continue
+            info = _s(r, "info")
+            if info:
+                sets_map[sid]["part4"]["info"] = info
+            sets_map[sid]["part4"]["questions"].append(
+                {"text": _s(r, "question_text"), "answer": _s(r, "answer")}
+            )
+
+        for r in _read("question_bank_part5.csv"):
+            sid = _i(r, "set_id")
+            if sid in sets_map:
+                sets_map[sid]["part5"] = {
+                    "text":   _s(r, "text"),
+                    "answer": _s(r, "answer"),
+                }
+
+        return {"sets": list(sets_map.values())}
 
     def _run(self) -> None:
         if self._idx >= len(self._steps):
