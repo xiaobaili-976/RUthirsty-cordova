@@ -123,7 +123,7 @@ def convert(json_path: str, xlsx_path: str):
                 cell.alignment = Alignment(wrap_text=True, vertical="top")
 
     wb.save(xlsx_path)
-    print(f"Saved → {xlsx_path}  ({len(sets)} sets, {sum(wb[s].max_row - 1 for s in wb.sheetnames)} data rows)")
+    print(f"Saved -> {xlsx_path}  ({len(sets)} sets, {sum(wb[s].max_row - 1 for s in wb.sheetnames)} data rows)")
 
 
 if __name__ == "__main__":
