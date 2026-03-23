@@ -732,8 +732,7 @@ class MainWindow(QMainWindow):
             self._trial_lbl.hide()
             return
         if self._license.is_dev_mode():
-            self._trial_lbl.setText("[ 开发者模式 ]")
-            self._trial_lbl.show()
+            self._trial_lbl.hide()
             return
         secs = self._license.trial_remaining_seconds()
         if secs <= 0:
