@@ -581,7 +581,8 @@ class MainWindow(QMainWindow):
         """
         dlg = QDialog(self)
         dlg.setWindowTitle("参考答案")
-        dlg.setFixedWidth(450)          # fixed width — suits English column reading
+        dlg.setMinimumWidth(540)        # resizable; wider default
+        dlg.resize(560, 260)            # initial size — user can drag to resize
         dlg.setWindowFlags(
             dlg.windowFlags() | Qt.WindowType.WindowStaysOnTopHint
         )

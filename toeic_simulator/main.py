@@ -22,16 +22,15 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("TOEIC Speaking Test Simulator")
 
-    # Global tooltip style — 微软雅黑 12 px, soft gray text on near-white bg
+    # Global tooltip style — 微软雅黑 12 px, black text, no background box
     app.setStyleSheet("""
         QToolTip {
-            background: #F5F5F5;
-            color: #616161;
-            border: 1px solid #CCCCCC;
-            border-radius: 4px;
+            background: transparent;
+            color: #000000;
+            border: none;
             font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", sans-serif;
             font-size: 12px;
-            padding: 4px 6px;
+            padding: 2px 4px;
         }
     """)
 
