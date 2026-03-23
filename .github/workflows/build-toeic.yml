@@ -1,0 +1,108 @@
+name: Build TOEIC Simulator EXE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'toeic_simulator/**'
+  workflow_dispatch:   # allow manual trigger
+
+permissions:
+  contents: write      # needed to create releases
+
+jobs:
+  build-windows:
+    name: Build Windows EXE
+    runs-on: windows-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Python setup ────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      # ── 3. Install dependencies ────────────────────────────────────────────
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PyQt6 pyttsx3 pyinstaller
+        working-directory: toeic_simulator
+
+      # ── 4. Build EXE ───────────────────────────────────────────────────────
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller `
+            --onefile `
+            --windowed `
+            --name "TOEIC_Speaking_Simulator" `
+            --hidden-import "pyttsx3.drivers" `
+            --hidden-import "pyttsx3.drivers.sapi5" `
+            --hidden-import "pyttsx3.drivers.nsss" `
+            --hidden-import "pyttsx3.drivers.espeak" `
+            --collect-all PyQt6 `
+            main.py
+        working-directory: toeic_simulator
+        shell: pwsh
+
+      # ── 5. Package release ZIP ────────────────────────────────────────────
+      - name: Package release
+        run: |
+          New-Item -ItemType Directory -Path release -Force
+          Copy-Item dist\TOEIC_Speaking_Simulator.exe release\
+          Copy-Item questions.json release\
+          New-Item -ItemType Directory -Path release\images -Force
+          # Write usage note
+          @"
+          TOEIC Speaking Test Simulator — 使用说明
+          ==========================================
+
+          1. 编辑 questions.json，填入您自己的题目。
+          2. 将 PART 2 的图片放入 images\ 文件夹。
+             图片路径需与 questions.json 中一致，例如 images\q3.jpg
+          3. 双击 TOEIC_Speaking_Simulator.exe 启动程序。
+          4. 点击"开始考试"即可进行 PART 1-5 全流程模拟。
+
+          系统要求：Windows 10 / 11（64位）
+          无需安装 Python 或其他软件，双击即用。
+          "@ | Out-File -FilePath release\README.txt -Encoding utf8
+          Compress-Archive -Path release\* -DestinationPath TOEIC_Simulator_Windows.zip
+        working-directory: toeic_simulator
+        shell: pwsh
+
+      # ── 6. Upload artifact (always available) ─────────────────────────────
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TOEIC_Simulator_Windows
+          path: toeic_simulator/TOEIC_Simulator_Windows.zip
+          retention-days: 30
+
+      # ── 7. Create GitHub Release ──────────────────────────────────────────
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "TOEIC Speaking Simulator v1.0.${{ github.run_number }}"
+          body: |
+            ## 托业口语考试模拟器 — Windows EXE
+
+            ### 下载
+            下载 `TOEIC_Simulator_Windows.zip`，解压后双击 EXE 即可运行。
+
+            ### 使用说明
+            1. 编辑 `questions.json` 填入自定义题目
+            2. 将 PART 2 图片放入 `images\` 文件夹
+            3. 双击 `TOEIC_Speaking_Simulator.exe`
+            4. 点击 **开始考试** 进行 PART 1–5 全流程模拟
+
+            ### 系统要求
+            Windows 10 / 11（64位），无需安装 Python
+          files: toeic_simulator/TOEIC_Simulator_Windows.zip
+          draft: false
+          prerelease: false
