@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'toeic_simulator/**'
+      - '.github/workflows/build-toeic.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,12 +27,14 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
+        working-directory: toeic_simulator
         run: |
           python -m pip install --upgrade pip
           pip install PyQt6 pyttsx3 pyaudio vosk openpyxl pyinstaller
-        working-directory: toeic_simulator
 
       - name: Build with PyInstaller
+        working-directory: toeic_simulator
+        shell: pwsh
         run: |
           pyinstaller `
             --onefile `
@@ -44,90 +47,87 @@ jobs:
             --hidden-import "vosk" `
             --collect-all PyQt6 `
             main.py
-        working-directory: toeic_simulator
-        shell: pwsh
 
       - name: Generate question_bank.xlsx from JSON
-        run: python make_question_bank_xlsx.py
         working-directory: toeic_simulator
         shell: pwsh
+        run: python make_question_bank_xlsx.py
 
-      - name: Package release
+      - name: Package release folder
+        working-directory: toeic_simulator
+        shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path release\images\set1 -Force
-          New-Item -ItemType Directory -Path release\images\set2 -Force
-          New-Item -ItemType Directory -Path release\records      -Force
-          New-Item -ItemType Directory -Path release\model        -Force
+          New-Item -ItemType Directory -Path release\images\set1 -Force | Out-Null
+          New-Item -ItemType Directory -Path release\images\set2 -Force | Out-Null
+          New-Item -ItemType Directory -Path release\records      -Force | Out-Null
+          New-Item -ItemType Directory -Path release\model        -Force | Out-Null
+
           Copy-Item dist\TOEIC_Speaking_Simulator.exe release\
           Copy-Item question_bank.xlsx               release\
-          Copy-Item answer_templates.json            release\
-          $readme = "TOEIC Speaking Test Simulator v6 (Professional Edition)`r`n"
-          $readme += "=========================================================`r`n`r`n"
-          $readme += "[Basic Usage]`r`n"
-          $readme += "1. Open question_bank.xlsx and edit questions / answers directly in Excel.`r`n"
-          $readme += "   Sheet layout: Sets | Part1 | Part2 | Part3 | Part4 | Part5`r`n"
-          $readme += "2. Place PART 2 images in images\set1\, images\set2\ etc.`r`n"
-          $readme += "3. Double-click TOEIC_Speaking_Simulator.exe to start.`r`n"
-          $readme += "4. First 3 days: full free trial with countdown in the header.`r`n"
-          $readme += "5. After trial: click any button to see the purchase / unlock dialog.`r`n"
-          $readme += "   Enter activation code BASE-XXXXXX000 to permanently unlock.`r`n`r`n"
-          $readme += "[New in v6 — Professional Edition]`r`n"
-          $readme += "- Smart Speaking Score: timing-based score shown after each recording`r`n"
-          $readme += "- Mistake Book: click the star button during exam to mark questions;`r`n"
-          $readme += "  review / export via Menu -> Features -> Mistake Book (Ctrl+M)`r`n"
-          $readme += "- High-Score Templates: second tab in the reference answer popup`r`n"
-          $readme += "  Edit answer_templates.json to customise templates`r`n"
-          $readme += "- Bank Update / Device Sync: stub dialogs (server features pending)`r`n`r`n"
-          $readme += "[Payment QR Codes]`r`n"
-          $readme += "Place wechat_pay.png and alipay_pay.png (payment QR codes) next to EXE.`r`n`r`n"
-          $readme += "[Recording + Speech-to-Text (optional)]`r`n"
-          $readme += "- With a mic connected, responses are recorded automatically.`r`n"
-          $readme += "- Audio saved to records\set_{id}\ folder.`r`n"
-          $readme += "- For speech-to-text (enables WPM scoring): download vosk-model-small-en-us`r`n"
-          $readme += "  from https://alphacephei.com/vosk/models, unzip as model\ folder.`r`n`r`n"
-          $readme += "[Developer Mode]`r`n"
-          $readme += "- Press Ctrl+Shift+T in the main window, enter password to bypass licensing.`r`n"
-          $readme += "- Or place dev_mode.txt next to the EXE.`r`n`r`n"
-          $readme += "[Requirements] Windows 10/11 64-bit, no Python needed.`r`n"
+          if (Test-Path images) { Copy-Item images release\images -Recurse -Force }
+
+          $v = "v1.0.${{ github.run_number }}"
+          $readme = @"
+          TOEIC Speaking Test Simulator $v
+          =====================================================
+
+          [使用方法]
+          1. 用 Excel 编辑 question_bank.xlsx 填写题目与参考答案。
+             Sheet 结构：Sets | Part1 | Part2 | Part3 | Part4 | Part5
+          2. Part 2 图片放入 images\set1\、images\set2\ 等子文件夹，
+             路径须与 xlsx 中一致。
+          3. 双击 TOEIC_Speaking_Simulator.exe 启动程序。
+          4. 首次启动进入 3 天试用期，标题栏实时倒计时。
+          5. 试用到期后程序提示联系开发者获取授权。
+
+          [开发者模式]
+          - 方法一：按 Ctrl+Shift+T 输入开发口令，跳过试用限制。
+          - 方法二：将 dev_mode.txt 文件放在 EXE 同目录，重启生效。
+
+          [录音 / 语音转文字（可选）]
+          - 连接麦克风后，作答阶段自动录音（标题栏显示 ● REC）。
+          - 录音保存至 records\set_{id}\ 目录。
+          - 启用语音转文字：
+              a. 前往 https://alphacephei.com/vosk/models
+              b. 下载 vosk-model-small-en-us（约 40 MB）
+              c. 解压后重命名为 model，放在 EXE 同目录
+
+          [系统要求]
+          Windows 10 / 11 64 位，无需安装 Python。
+          "@
           Set-Content -Path release\README.txt -Value $readme -Encoding utf8
-          Compress-Archive -Path release\* -DestinationPath TOEIC_Simulator_Windows_v6.zip
-        working-directory: toeic_simulator
-        shell: pwsh
+
+          Compress-Archive -Path release\* `
+            -DestinationPath TOEIC_Simulator_Windows_$v.zip
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TOEIC_Simulator_Windows_v6
-          path: toeic_simulator/TOEIC_Simulator_Windows_v6.zip
+          name: TOEIC_Simulator_Windows_v1.0.${{ github.run_number }}
+          path: toeic_simulator/TOEIC_Simulator_Windows_v1.0.${{ github.run_number }}.zip
           retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v6.0.${{ github.run_number }}"
-          name: "TOEIC Speaking Simulator v6.0.${{ github.run_number }} — 终身专业版"
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "TOEIC Speaking Simulator v1.0.${{ github.run_number }}"
           body: |
-            ## 托业口语考试模拟器 v6 — Windows EXE（终身专业版）
+            ## 托业口语考试模拟器 v1.0.${{ github.run_number }} — Windows EXE
 
-            ### 全新功能
-            - **3天全功能试用期** — 首次启动计时，关闭重启不重置，倒计时显示在标题栏
-            - **收费激活** — 购买弹窗含微信/支付宝收款码、机器码显示、激活码输入（¥19.9永久解锁）
-            - **开发者双触发** — Ctrl+Shift+T 输入口令 或 放置 dev_mode.txt 跳过校验
-            - **智能语音评分** — 每题录音结束后弹出评分（准备时间 + 作答时长 + 流利度 WPM）
-            - **错题本** — 考试中点击★按钮标记，菜单 → 错题本 查看/导出 Excel（Ctrl+M）
-            - **高分答题模板库** — 参考答案弹窗第二 Tab，支持自定义 answer_templates.json
-            - **题库更新 / 数据同步** — 占位入口（后续版本接入服务器）
+            ### 功能概览
+            - 完整 TOEIC Speaking 考试流程（Part 1–5，含计时、跳过、录音）
+            - 参考答案弹窗（📖 按钮）
+            - 3 天全功能试用期，标题栏实时倒计时
+            - 开发者模式：Ctrl+Shift+T 输入口令，或放置 `dev_mode.txt` 跳过限制
+            - 题库支持 Excel（question_bank.xlsx）/ JSON / CSV 三种格式
+            - 可选语音录音 + Vosk 语音转文字
 
-            ### 使用前准备（开发者）
-            1. 将微信/支付宝收款码图片命名为 `wechat_pay.png` / `alipay_pay.png`，放入 EXE 同目录
-            2. 收到用户机器码后，生成激活码：`BASE-` + 机器码后6位 + 任意3位数字
-            3. 将激活码发给用户，用户在程序内输入即可永久解锁
-
-            ### 下载与使用
-            下载 `TOEIC_Simulator_Windows_v6.zip`，解压后参见 README.txt
+            ### 下载使用
+            下载 `TOEIC_Simulator_Windows_v1.0.${{ github.run_number }}.zip`，解压后参见 README.txt
 
             ### 系统要求
-            Windows 10 / 11（64位），无需安装 Python
-          files: toeic_simulator/TOEIC_Simulator_Windows_v6.zip
+            Windows 10 / 11（64 位），无需安装 Python
+          files: toeic_simulator/TOEIC_Simulator_Windows_v1.0.${{ github.run_number }}.zip
           draft: false
           prerelease: false

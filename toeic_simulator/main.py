@@ -10,13 +10,10 @@ else:
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
 
-from engine           import ExamEngine
-from recorder         import RecorderManager
-from window           import MainWindow
-from license_manager  import LicenseManager
-from mistake_book     import MistakeBook
-from score_analyzer   import ScoreAnalyzer
-from template_manager import TemplateManager
+from engine          import ExamEngine
+from recorder        import RecorderManager
+from window          import MainWindow
+from license_manager import LicenseManager
 
 
 def main():
@@ -26,7 +23,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("TOEIC Speaking Test Simulator")
 
-    # Global tooltip style — 微软雅黑 12 px, black text, no background box
+    # Global tooltip style — 微软雅黑 12 px, white text, no background box
     app.setStyleSheet("""
         QToolTip {
             background: transparent;
@@ -38,20 +35,11 @@ def main():
         }
     """)
 
-    engine        = ExamEngine(BASE_DIR)
-    recorder      = RecorderManager(BASE_DIR)
-    license_mgr   = LicenseManager(BASE_DIR)
-    mistake_book  = MistakeBook(BASE_DIR)
-    score_analyzer = ScoreAnalyzer()
-    template_mgr  = TemplateManager(BASE_DIR)
+    engine      = ExamEngine(BASE_DIR)
+    recorder    = RecorderManager(BASE_DIR)
+    license_mgr = LicenseManager(BASE_DIR)
 
-    win = MainWindow(
-        engine, recorder,
-        license_mgr=license_mgr,
-        mistake_book=mistake_book,
-        score_analyzer=score_analyzer,
-        template_mgr=template_mgr,
-    )
+    win = MainWindow(engine, recorder, license_mgr=license_mgr)
     win.show()
 
     sys.exit(app.exec())
