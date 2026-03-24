@@ -58,61 +58,19 @@ jobs:
 
           Copy-Item dist\TOEIC_Speaking_Pro.exe release\
 
-          # Copy question bank (prefer xlsx, fallback to json)
           if (Test-Path question_bank.xlsx) {
             Copy-Item question_bank.xlsx release\
           } elseif (Test-Path question_bank.json) {
             Copy-Item question_bank.json release\
           }
 
-          # Copy images if present
           if (Test-Path images) {
             Copy-Item images release\images -Recurse -Force
           }
 
-          # Write README
-          $readme = @"
-TOEIC Speaking Pro $v
-==============================================
+          Copy-Item DIST_README.txt release\README.txt
 
-【启动方式】
-  双击 TOEIC_Speaking_Pro.exe，无需安装 Python。
-
-【首次使用】
-  软件附带 3 天免费试用期。
-  点击右上角齿轮图标可查看剩余时间或输入邀请码激活正版。
-  试用到期后弹出激活窗口，输入邀请码或退出程序。
-
-【题库更新】
-  用 Excel 编辑 question_bank.xlsx，保存后重启生效。
-  Sheet 结构：Sets | Part1 | Part2 | Part3 | Part4 | Part5
-
-【Part 2 图片】
-  将图片放入 images\set1\、images\set2\ 等子文件夹，
-  路径须与 xlsx 中一致（如 images/set1/q3.jpg）。
-
-【语音评分】
-  需要讯飞开放平台 ISE 服务账号（联网使用）。
-  首次点击评分按钮时程序引导输入 API 密钥。
-  评分期间考试计时自动暂停，关闭结果窗口后恢复。
-
-【语音转文字（可选）】
-  1. 前往 https://alphacephei.com/vosk/models
-  2. 下载 vosk-model-small-en-us（约 40 MB）
-  3. 解压后重命名为 model，放在 EXE 同目录，重启生效。
-
-【开发者模式】
-  方法一：Ctrl+Shift+T 输入开发口令
-  方法二：将 dev_mode.txt 放在 EXE 同目录，重启生效
-
-【系统要求】
-  Windows 10 / 11（64 位），无需安装任何依赖。
-"@
-          Set-Content -Path release\README.txt -Value $readme -Encoding utf8
-
-          # Pack zip
-          Compress-Archive -Path release\* `
-            -DestinationPath TOEIC_Speaking_Pro_Windows_$v.zip
+          Compress-Archive -Path release\* -DestinationPath TOEIC_Speaking_Pro_Windows_$v.zip
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -127,20 +85,19 @@ TOEIC Speaking Pro $v
           tag_name: "v1.0.${{ github.run_number }}"
           name: "TOEIC Speaking Pro v1.0.${{ github.run_number }}"
           body: |
-            ## TOEIC Speaking Pro v1.0.${{ github.run_number }} — Windows 单文件 EXE
+            ## TOEIC Speaking Pro v1.0.${{ github.run_number }} — Windows EXE
 
             ### 功能亮点
-            - 完整 TOEIC Speaking 考试流程（Part 1–5，计时 / 跳过 / 录音）
-            - 参考答案弹窗（📖 按钮）+ 离线朗读答案（TTS）
+            - 完整 TOEIC Speaking 考试流程（Part 1-5，计时 / 跳过 / 录音）
+            - 参考答案弹窗（书籍图标）+ 离线朗读答案（TTS）
             - 背诵复习模式：随机练习 / 答案速背 / 高频题专练 / 薄弱题巩固
-            - 标记高频 ★ / 薄弱题 ● 并本地存储
+            - 标记高频 / 薄弱题并本地存储
             - 语音评分（讯飞 ISE API，联网，评分期间自动暂停计时）
-            - 3 天试用期 → 邀请码激活正版，右上角齿轮 / × 图标切换
+            - 3 天试用期 + 邀请码激活，右上角齿轮/退出图标自动切换
             - 题库支持 Excel / JSON / CSV，运行时热替换
 
             ### 下载使用
-            下载 `TOEIC_Speaking_Pro_Windows_v1.0.${{ github.run_number }}.zip`，
-            解压后双击 `TOEIC_Speaking_Pro.exe`，详见 README.txt。
+            下载 zip，解压后双击 `TOEIC_Speaking_Pro.exe`，详见 README.txt。
 
             ### 系统要求
             Windows 10 / 11（64 位），无需安装 Python
