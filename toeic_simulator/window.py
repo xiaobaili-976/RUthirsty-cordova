@@ -1,20 +1,22 @@
 """
-Main window — PyQt6 UI for TOEIC Speaking Test Simulator (v3).
+Main window — PyQt6 UI for TOEIC Speaking Pro.
 
-Changes vs v2
-─────────────
-  • [OPT-1] Answer dialog: Calibri 14 pt, 1.5 × line-height, 10 px padding,
-            dark-gray text (#333), light near-white background — no harsh borders.
-  • [OPT-2] Header redundant timer removed; single canonical timer lives in the
-            bottom timer-bar only.
-  • [OPT-3] Home button (⌂) added to header, same size as "?" button, 8 px gap,
-            tooltip "返回主页". Click: saves recording, aborts exam, returns to
-            set-selection page.
-  • [OPT-4] Answer "?" button now has consistent tooltip "参考答案" (was already
-            present but now guaranteed visible via Qt.ToolTipRole).
-  • [OPT-5] Skip button always enabled during exam (engine emits skip_available=True
-            for both timer AND TTS steps; Method-2 interrupt logic in engine/tts).
+Changes vs v3 (original preserved, incremental additions only)
+──────────────────────────────────────────────────────────────
+  [PRO-1] Window / app title updated to "TOEIC Speaking Pro".
+  [PRO-2] Home page: two mode-entry buttons added below original button row
+          (考试模拟模式 / 背诵复习模式) — original buttons fully preserved.
+  [PRO-3] Exam page timer bar: 语音评分 button added right of 跳过 (disabled
+          until recording stops; re-disables when new recording starts).
+  [PRO-4] Answer dialog: 朗读答案 / 停止朗读 buttons added before 关闭;
+          dialog close auto-stops TTS.
+  [PRO-5] Review mode page (page index 3): independent 背诵复习 page with
+          4 sub-modes (随机练习 / 答案速背 / 高频题专练 / 薄弱题巩固),
+          per-question mark buttons (★高频 / ●薄弱), manual recording, and
+          语音评分.
+  [PRO-6] All original exam flow / timer / recording / TTS logic untouched.
 """
+import html as _html
 import os
 
 from PyQt6.QtWidgets import (
@@ -22,7 +24,7 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QFrame, QScrollArea,
     QStackedWidget, QSizePolicy, QListWidget, QListWidgetItem,
     QDialog, QTextEdit, QMessageBox,
-    QInputDialog, QLineEdit,
+    QInputDialog, QLineEdit, QFileDialog,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QPoint, QSize, QTimer
 from PyQt6.QtGui import (
@@ -86,6 +88,62 @@ QPushButton:pressed { background: rgba(0,   0,   0,   0.15); }
 """
 _ICON_SZ = QSize(24, 24)   # icon canvas / display size
 
+# [PRO] Small action button style for review mode controls
+_BTN_ACT = f"""
+QPushButton {{
+    background:{_BLUE}; color:white;
+    font-size:13px; font-weight:bold;
+    padding:7px 18px; border-radius:6px;
+}}
+QPushButton:hover   {{ background:#0044B3; }}
+QPushButton:disabled{{ background:#AABBCC; color:#DDD; }}
+"""
+# Mark buttons — neutral state
+_MARK_OFF = """
+QPushButton {
+    background:#F0F0F0; color:#555;
+    font-size:13px; font-weight:bold;
+    padding:7px 16px; border-radius:6px;
+    border: 1px solid #CCC;
+}
+QPushButton:hover { background:#E0E0E0; }
+"""
+# Mark buttons — active (marked) state
+_MARK_WEAK_ON = """
+QPushButton {
+    background:#FF6B6B; color:white;
+    font-size:13px; font-weight:bold;
+    padding:7px 16px; border-radius:6px;
+}
+QPushButton:hover { background:#E05050; }
+"""
+_MARK_HF_ON = """
+QPushButton {
+    background:#F5A623; color:white;
+    font-size:13px; font-weight:bold;
+    padding:7px 16px; border-radius:6px;
+}
+QPushButton:hover { background:#D4901D; }
+"""
+# Sub-mode buttons — inactive/active
+_SUB_OFF = f"""
+QPushButton {{
+    background:#F0F2F5; color:{_BLUE};
+    font-size:15px; font-weight:bold;
+    padding:10px 22px; border-radius:7px;
+    border:2px solid {_BORDER};
+}}
+QPushButton:hover {{ background:{_HI}; }}
+"""
+_SUB_ON = f"""
+QPushButton {{
+    background:{_BLUE}; color:white;
+    font-size:15px; font-weight:bold;
+    padding:10px 22px; border-radius:7px;
+    border:2px solid {_BLUE};
+}}
+"""
+
 
 def _make_home_qicon() -> QIcon:
     """
@@ -140,15 +198,34 @@ def _make_book_qicon() -> QIcon:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, engine, recorder, license_mgr=None):
+    def __init__(self, engine, recorder, license_mgr=None,
+                 marks_mgr=None, review_engine=None):
         super().__init__()
         self._engine         = engine
         self._recorder       = recorder
         self._license        = license_mgr
+        self._marks_mgr      = marks_mgr        # [PRO] MarksManager
+        self._review_engine  = review_engine    # [PRO] ReviewEngine
         self._current_answer = ""
         self._is_recording   = False
+        self._last_wav_path  = ""               # [PRO] last WAV for voice scoring
 
-        self.setWindowTitle("TOEIC Speaking Test Simulator")
+        # [PRO] Review-mode state
+        self._review_qs:     list  = []   # current question list
+        self._review_idx:    int   = 0    # current position
+        self._review_speed:  bool  = False  # speed mode: auto-show answer
+        self._review_mode:   str   = ""     # "random"/"speed"/"high_freq"/"weak"
+        self._rev_recording: bool  = False
+        self._rev_last_wav:  str   = ""
+        self._rev_cur_image: str   = ""
+
+        # [PRO] Lazy TTS for UI (answer read-aloud, review TTS)
+        self._ui_tts = None   # created on first use
+
+        # [PRO] Voice scorer
+        self._voice_scorer = None   # created on first use
+
+        self.setWindowTitle("TOEIC Speaking Pro")   # [PRO-1]
         self.setMinimumSize(1024, 768)
         self.resize(1280, 820)
         self.setStyleSheet(f"QMainWindow{{background:{_BG};}}")
@@ -166,6 +243,22 @@ class MainWindow(QMainWindow):
         self._update_trial_label()
 
     # ─────────────────────────────────────────────────────────────────────────
+    # Lazy helpers
+    # ─────────────────────────────────────────────────────────────────────────
+    def _get_ui_tts(self):
+        """Return (and lazily create) the UI TTSManager."""
+        if self._ui_tts is None:
+            from tts_manager import TTSManager
+            self._ui_tts = TTSManager()
+        return self._ui_tts
+
+    def _get_voice_scorer(self):
+        if self._voice_scorer is None:
+            from voice_scorer import VoiceScorer
+            self._voice_scorer = VoiceScorer()
+        return self._voice_scorer
+
+    # ─────────────────────────────────────────────────────────────────────────
     # UI construction
     # ─────────────────────────────────────────────────────────────────────────
     def _build_ui(self):
@@ -179,9 +272,10 @@ class MainWindow(QMainWindow):
         self._pages = QStackedWidget()
         vbox.addWidget(self._pages, 1)
 
-        for page in (self._make_set_select_page(),
-                     self._make_exam_page(),
-                     self._make_end_page()):
+        for page in (self._make_set_select_page(),   # 0
+                     self._make_exam_page(),          # 1
+                     self._make_end_page(),           # 2
+                     self._make_review_page()):       # 3  [PRO-5]
             self._pages.addWidget(page)
 
     # ── Header ────────────────────────────────────────────────────────────────
@@ -192,7 +286,7 @@ class MainWindow(QMainWindow):
         lay = QHBoxLayout(hdr)
         lay.setContentsMargins(28, 0, 16, 0)
 
-        title = QLabel("TOEIC\u00ae Speaking Test Simulator")
+        title = QLabel("TOEIC\u00ae Speaking Pro")   # [PRO-1]
         title.setStyleSheet("color:white; font-size:18px; font-weight:bold;")
         lay.addWidget(title)
 
@@ -238,7 +332,6 @@ class MainWindow(QMainWindow):
         lay.addWidget(self._ans_btn)
 
         lay.addSpacing(12)
-        # [OPT-2] _hdr_timer REMOVED — canonical timer is in the bottom bar only.
         return hdr
 
     # ── Set-selection page ────────────────────────────────────────────────────
@@ -249,7 +342,7 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(80, 48, 80, 48)
         lay.setSpacing(16)
 
-        t1 = QLabel("TOEIC\u00ae Speaking Test")
+        t1 = QLabel("TOEIC\u00ae Speaking Pro")
         t1.setStyleSheet(f"font-size:40px; font-weight:bold; color:{_BLUE};")
         t1.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(t1)
@@ -277,6 +370,7 @@ class MainWindow(QMainWindow):
 
         lay.addSpacing(24)
 
+        # Original button row — fully preserved
         btn_row = QHBoxLayout()
         btn_row.setSpacing(20)
 
@@ -290,9 +384,50 @@ class MainWindow(QMainWindow):
         quit_btn.clicked.connect(self.close)
         btn_row.addWidget(quit_btn)
 
+        update_btn = QPushButton("更新题库")
+        update_btn.setStyleSheet(_BTN_SM)
+        update_btn.setToolTip("选择新的 Excel / CSV 题库文件覆盖本地题库，更新后重启生效")
+        update_btn.clicked.connect(self._on_update_bank)
+        btn_row.addWidget(update_btn)
+
         btn_row.insertStretch(0)
         btn_row.addStretch()
         lay.addLayout(btn_row)
+
+        # ── [PRO-2] Mode entry buttons ─────────────────────────────────────
+        lay.addSpacing(24)
+
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color:{_BORDER};")
+        lay.addWidget(sep)
+
+        lay.addSpacing(10)
+
+        mode_hint = QLabel("选择练习模式  /  Choose Practice Mode")
+        mode_hint.setStyleSheet("font-size:14px; color:#888;")
+        mode_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lay.addWidget(mode_hint)
+
+        lay.addSpacing(10)
+
+        mode_row = QHBoxLayout()
+        mode_row.setSpacing(24)
+        mode_row.addStretch()
+
+        exam_mode_btn = QPushButton("考试模拟模式")
+        exam_mode_btn.setStyleSheet(_BTN)
+        exam_mode_btn.clicked.connect(self._on_confirm_set)
+        mode_row.addWidget(exam_mode_btn)
+
+        review_mode_btn = QPushButton("背诵复习模式")
+        review_mode_btn.setStyleSheet(_BTN)
+        review_mode_btn.clicked.connect(self._on_enter_review)
+        mode_row.addWidget(review_mode_btn)
+
+        mode_row.addStretch()
+        lay.addLayout(mode_row)
+
         return page
 
     # ── Exam page ─────────────────────────────────────────────────────────────
@@ -369,7 +504,7 @@ class MainWindow(QMainWindow):
         self._sec_frame.hide()
         lay.addWidget(self._sec_frame)
 
-        # Timer bar: phase label | stretch | countdown | 20px | skip button
+        # Timer bar: phase label | stretch | countdown | 20px | skip button | score button
         tbar = QFrame()
         tbar.setFixedHeight(66)
         tbar.setStyleSheet(
@@ -383,7 +518,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(self._phase_lbl)
         tb.addStretch()
 
-        # [OPT-2] Sole canonical timer display lives here (header timer removed)
+        # [OPT-2] Sole canonical timer display
         self._countdown_lbl = QLabel("")
         self._countdown_lbl.setStyleSheet(
             f"font-size:34px; font-weight:bold; color:{_BLUE};"
@@ -398,6 +533,17 @@ class MainWindow(QMainWindow):
         self._skip_btn.setEnabled(False)   # disabled until exam begins
         self._skip_btn.clicked.connect(self._engine.skip)
         tb.addWidget(self._skip_btn)
+
+        # [PRO-3] Voice scoring button — enabled only after a recording completes
+        tb.addSpacing(8)
+        self._score_btn = QPushButton("语音评分")
+        self._score_btn.setStyleSheet(_SKIP_BTN)
+        self._score_btn.setEnabled(False)
+        self._score_btn.setToolTip("录音完成后可点击评分（需联网）")
+        self._score_btn.clicked.connect(
+            lambda: self._on_voice_score(self._last_wav_path, self._current_answer)
+        )
+        tb.addWidget(self._score_btn)
 
         lay.addWidget(tbar)
         return page
@@ -439,6 +585,259 @@ class MainWindow(QMainWindow):
         lay.addLayout(row)
         return page
 
+    # ── Review mode page [PRO-5] ──────────────────────────────────────────────
+    def _make_review_page(self) -> QWidget:
+        page = QWidget()
+        page.setStyleSheet(f"background:{_BG};")
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(0)
+
+        # ── Top bar: sub-mode buttons ──────────────────────────────────────
+        top_bar = QFrame()
+        top_bar.setStyleSheet(
+            f"background:{_LIGHT}; border-bottom:1px solid {_BORDER};"
+        )
+        top_lay = QHBoxLayout(top_bar)
+        top_lay.setContentsMargins(24, 12, 24, 12)
+        top_lay.setSpacing(12)
+
+        # Back to home (text style to match header)
+        back_btn = QPushButton("← 返回首页")
+        back_btn.setStyleSheet(_BTN_SM)
+        back_btn.clicked.connect(self._on_review_home)
+        top_lay.addWidget(back_btn)
+
+        top_lay.addSpacing(16)
+
+        # Sub-mode buttons
+        self._rev_mode_btns: dict = {}
+        modes = [
+            ("random",    "随机练习"),
+            ("speed",     "答案速背"),
+            ("high_freq", "高频题专练"),
+            ("weak",      "薄弱题巩固"),
+        ]
+        for key, label in modes:
+            btn = QPushButton(label)
+            btn.setStyleSheet(_SUB_OFF)
+            btn.clicked.connect(lambda _=False, k=key: self._load_review_mode(k))
+            self._rev_mode_btns[key] = btn
+            top_lay.addWidget(btn)
+
+        top_lay.addStretch()
+
+        # Question counter label
+        self._rev_counter_lbl = QLabel("0 / 0")
+        self._rev_counter_lbl.setStyleSheet(
+            f"font-size:14px; color:{_BLUE}; font-weight:bold;"
+        )
+        top_lay.addWidget(self._rev_counter_lbl)
+
+        lay.addWidget(top_bar)
+
+        # ── Content area ───────────────────────────────────────────────────
+        content_area = QWidget()
+        content_area.setStyleSheet(f"background:{_BG};")
+        c_lay = QVBoxLayout(content_area)
+        c_lay.setContentsMargins(52, 20, 52, 0)
+        c_lay.setSpacing(0)
+
+        # Question title
+        self._rev_q_title = QLabel("")
+        self._rev_q_title.setStyleSheet(
+            f"font-size:19px; font-weight:bold; color:{_BLUE};"
+            f"padding-bottom:10px; border-bottom:2px solid {_BLUE}; margin-bottom:14px;"
+        )
+        self._rev_q_title.setWordWrap(True)
+        c_lay.addWidget(self._rev_q_title)
+
+        # Part label
+        self._rev_part_lbl = QLabel("")
+        self._rev_part_lbl.setStyleSheet("font-size:13px; color:#888; margin-bottom:8px;")
+        c_lay.addWidget(self._rev_part_lbl)
+
+        # Content stack: 0=text, 1=image
+        self._rev_content_stack = QStackedWidget()
+        c_lay.addWidget(self._rev_content_stack, 1)
+
+        # text page
+        rtp   = QWidget()
+        rtp_l = QVBoxLayout(rtp)
+        rtp_l.setContentsMargins(0, 0, 0, 0)
+        self._rev_text_lbl = QLabel("")
+        self._rev_text_lbl.setStyleSheet("font-size:17px; color:#111; line-height:1.8;")
+        self._rev_text_lbl.setWordWrap(True)
+        self._rev_text_lbl.setAlignment(
+            Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
+        )
+        self._rev_text_lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        rsc = QScrollArea()
+        rsc.setWidget(self._rev_text_lbl)
+        rsc.setWidgetResizable(True)
+        rsc.setStyleSheet("border:none;")
+        rtp_l.addWidget(rsc)
+
+        # image page
+        rip   = QWidget()
+        rip_l = QVBoxLayout(rip)
+        rip_l.setContentsMargins(0, 0, 0, 0)
+        self._rev_img_lbl = QLabel()
+        self._rev_img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._rev_img_lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self._rev_img_lbl.setStyleSheet(
+            f"border:1px solid {_BORDER}; background:#fafafa;"
+        )
+        rip_l.addWidget(self._rev_img_lbl)
+
+        self._rev_content_stack.addWidget(rtp)   # index 0
+        self._rev_content_stack.addWidget(rip)   # index 1
+
+        # Secondary frame (Part 3/4 question text)
+        self._rev_sec_frame = QFrame()
+        self._rev_sec_frame.setStyleSheet(
+            f"background:{_HI}; border-radius:7px; margin-top:8px;"
+        )
+        rsi = QVBoxLayout(self._rev_sec_frame)
+        rsi.setContentsMargins(16, 10, 16, 10)
+        self._rev_sec_lbl = QLabel("")
+        self._rev_sec_lbl.setStyleSheet(
+            "font-size:15px; color:#333; font-style:italic;"
+        )
+        self._rev_sec_lbl.setWordWrap(True)
+        rsi.addWidget(self._rev_sec_lbl)
+        self._rev_sec_frame.hide()
+        c_lay.addWidget(self._rev_sec_frame)
+
+        # Answer area (hidden by default; shown in speed mode or on button click)
+        self._rev_ans_frame = QFrame()
+        self._rev_ans_frame.setStyleSheet(
+            f"background:#F8F8F8; border:1px solid {_BORDER}; "
+            f"border-radius:6px; margin-top:8px;"
+        )
+        raf = QVBoxLayout(self._rev_ans_frame)
+        raf.setContentsMargins(12, 8, 12, 8)
+        ans_title = QLabel("参考答案 / Reference Answer")
+        ans_title.setStyleSheet(
+            f"color:{_BLUE}; font-size:12px; font-weight:bold; border:none;"
+        )
+        raf.addWidget(ans_title)
+        self._rev_ans_te = QTextEdit()
+        self._rev_ans_te.setReadOnly(True)
+        self._rev_ans_te.setMinimumHeight(80)
+        self._rev_ans_te.setMaximumHeight(160)
+        self._rev_ans_te.setStyleSheet(
+            "background:#F8F8F8; border:none; color:#333;"
+        )
+        raf.addWidget(self._rev_ans_te)
+        self._rev_ans_frame.hide()
+        c_lay.addWidget(self._rev_ans_frame)
+
+        lay.addWidget(content_area, 1)
+
+        # ── Bottom control bar ─────────────────────────────────────────────
+        ctrl_bar = QFrame()
+        ctrl_bar.setFixedHeight(110)
+        ctrl_bar.setStyleSheet(
+            f"background:{_LIGHT}; border-top:1px solid {_BORDER};"
+        )
+        cb = QVBoxLayout(ctrl_bar)
+        cb.setContentsMargins(24, 8, 24, 8)
+        cb.setSpacing(6)
+
+        # Row 1: navigation + marks
+        row1 = QHBoxLayout()
+        row1.setSpacing(10)
+
+        self._rev_prev_btn = QPushButton("◀  上一题")
+        self._rev_prev_btn.setStyleSheet(_BTN_ACT)
+        self._rev_prev_btn.clicked.connect(self._on_review_prev)
+        row1.addWidget(self._rev_prev_btn)
+
+        self._rev_next_btn = QPushButton("下一题  ▶")
+        self._rev_next_btn.setStyleSheet(_BTN_ACT)
+        self._rev_next_btn.clicked.connect(self._on_review_next)
+        row1.addWidget(self._rev_next_btn)
+
+        row1.addStretch()
+
+        self._rev_weak_btn = QPushButton("● 标记薄弱")
+        self._rev_weak_btn.setStyleSheet(_MARK_OFF)
+        self._rev_weak_btn.clicked.connect(self._on_toggle_weak)
+        row1.addWidget(self._rev_weak_btn)
+
+        self._rev_hf_btn = QPushButton("★ 标记高频")
+        self._rev_hf_btn.setStyleSheet(_MARK_OFF)
+        self._rev_hf_btn.clicked.connect(self._on_toggle_high_freq)
+        row1.addWidget(self._rev_hf_btn)
+
+        cb.addLayout(row1)
+
+        # Row 2: answer actions + recording + scoring
+        row2 = QHBoxLayout()
+        row2.setSpacing(10)
+
+        self._rev_ans_btn = QPushButton("查看答案")
+        self._rev_ans_btn.setStyleSheet(_BTN_ACT)
+        self._rev_ans_btn.clicked.connect(self._on_review_show_answer)
+        row2.addWidget(self._rev_ans_btn)
+
+        self._rev_tts_btn = QPushButton("朗读答案")
+        self._rev_tts_btn.setStyleSheet(_BTN_ACT)
+        self._rev_tts_btn.clicked.connect(self._on_review_tts_read)
+        row2.addWidget(self._rev_tts_btn)
+
+        self._rev_tts_stop_btn = QPushButton("停止朗读")
+        self._rev_tts_stop_btn.setStyleSheet(_BTN_ACT)
+        self._rev_tts_stop_btn.clicked.connect(self._on_review_tts_stop)
+        row2.addWidget(self._rev_tts_stop_btn)
+
+        row2.addSpacing(16)
+
+        self._rev_rec_btn = QPushButton("▶ 开始录音")
+        self._rev_rec_btn.setStyleSheet(_BTN_ACT)
+        self._rev_rec_btn.clicked.connect(self._on_review_rec_toggle)
+        row2.addWidget(self._rev_rec_btn)
+
+        self._rev_score_btn = QPushButton("语音评分")
+        self._rev_score_btn.setStyleSheet(_BTN_ACT)
+        self._rev_score_btn.setEnabled(False)
+        self._rev_score_btn.setToolTip("录音完成后可点击评分（需联网）")
+        self._rev_score_btn.clicked.connect(
+            lambda: self._on_voice_score(self._rev_last_wav, self._rev_current_answer())
+        )
+        row2.addWidget(self._rev_score_btn)
+
+        row2.addStretch()
+
+        # REC indicator for review
+        self._rev_rec_dot = QLabel("● REC")
+        self._rev_rec_dot.setStyleSheet(
+            "color:#FF4444; font-size:12px; font-weight:bold;"
+        )
+        self._rev_rec_dot.hide()
+        row2.addWidget(self._rev_rec_dot)
+
+        cb.addLayout(row2)
+        lay.addWidget(ctrl_bar)
+
+        # Empty state label (shown when no questions are available)
+        self._rev_empty_lbl = QLabel(
+            "暂无题目\n\n请先在随机练习或答案速背中标记题目，\n"
+            "再使用高频题专练或薄弱题巩固模式。"
+        )
+        self._rev_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._rev_empty_lbl.setStyleSheet(
+            "font-size:16px; color:#999; line-height:2;"
+        )
+        self._rev_empty_lbl.hide()
+
+        return page
+
     # ─────────────────────────────────────────────────────────────────────────
     # Signal wiring
     # ─────────────────────────────────────────────────────────────────────────
@@ -456,7 +855,7 @@ class MainWindow(QMainWindow):
             self._recorder.transcription_ready.connect(self._on_transcription)
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Slots
+    # Slots — original exam flow (untouched)
     # ─────────────────────────────────────────────────────────────────────────
     def _populate_sets(self):
         self._set_list.clear()
@@ -477,7 +876,9 @@ class MainWindow(QMainWindow):
         set_id = items[0].data(Qt.ItemDataRole.UserRole)
         self._engine.load_set(set_id)
         self._current_answer = ""
-        # [OPT-3] show both header buttons when entering exam
+        self._last_wav_path  = ""         # [PRO] reset last WAV
+        self._score_btn.setEnabled(False) # [PRO] reset score button
+        # show both header buttons when entering exam
         self._home_btn.show()
         self._ans_btn.show()
         self._pages.setCurrentIndex(1)
@@ -579,26 +980,34 @@ class MainWindow(QMainWindow):
         if self._recorder:
             self._recorder.start_recording(subdir, hint)
         self._rec_dot.show()
-        self._is_recording = True
+        self._is_recording   = True
+        self._score_btn.setEnabled(False)   # [PRO] disable while recording
 
     @pyqtSlot()
     def _on_rec_stop(self):
         if self._recorder:
             self._recorder.stop_recording()
+            # [PRO] capture last WAV path for voice scoring
+            if hasattr(self._recorder, "_current_wav") and self._recorder._current_wav:
+                self._last_wav_path = self._recorder._current_wav
         self._rec_dot.hide()
         self._is_recording = False
+        # [PRO] enable voice scoring after recording
+        if self._last_wav_path:
+            self._score_btn.setEnabled(True)
 
     @pyqtSlot(str, str)
     def _on_transcription(self, wav_path: str, text: str):
         print(f"[Window] Transcript ready for {os.path.basename(wav_path)}")
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Answer dialog  [OPT-1]
+    # Answer dialog  [OPT-1 + PRO-4]
     # ─────────────────────────────────────────────────────────────────────────
     def _show_answer(self):
         """
         Answer popup — 800 px wide, #F8F8F8 background, 12 px padding.
         Shows reference answer in Calibri 14pt · 1.5× line-height · #333333.
+        [PRO-4] 朗读答案 / 停止朗读 buttons added at bottom.
         """
         if not self._require_license():
             return
@@ -651,7 +1060,6 @@ class MainWindow(QMainWindow):
 
         raw = self._current_answer.strip() if self._current_answer else ""
         if raw:
-            import html as _html
             escaped = _html.escape(raw).replace("\n", "<br>")
             html_body = (
                 f'<p style="'
@@ -674,7 +1082,362 @@ class MainWindow(QMainWindow):
         te.setHtml(html_body)
         vb.addWidget(te)
 
+        # [PRO-4] Bottom button row: TTS controls + close
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(8)
+
+        tts_read_btn = QPushButton("朗读答案")
+        btn_row.addWidget(tts_read_btn)
+
+        tts_stop_btn = QPushButton("停止朗读")
+        btn_row.addWidget(tts_stop_btn)
+
+        btn_row.addStretch()
+
         close = QPushButton("关闭")
+        close.clicked.connect(dlg.accept)
+        btn_row.addWidget(close)
+
+        vb.addLayout(btn_row)
+
+        # Wire TTS actions
+        ui_tts = self._get_ui_tts()
+        tts_read_btn.clicked.connect(lambda: ui_tts.speak(raw) if raw else None)
+        tts_stop_btn.clicked.connect(ui_tts.interrupt)
+        dlg.finished.connect(lambda _: ui_tts.interrupt())
+
+        dlg.exec()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Review mode — page navigation  [PRO-5]
+    # ─────────────────────────────────────────────────────────────────────────
+    def _on_enter_review(self):
+        """Navigate to review page; load random mode by default."""
+        if not self._require_license():
+            return
+        if not self._review_engine:
+            QMessageBox.information(
+                self, "提示",
+                "背诵复习功能正在初始化，请稍后重试。"
+            )
+            return
+        # Stop any review TTS before entering
+        if self._ui_tts:
+            self._ui_tts.interrupt()
+        self._home_btn.hide()
+        self._ans_btn.hide()
+        self._rec_dot.hide()
+        self._pages.setCurrentIndex(3)
+        # Default: random mode
+        self._load_review_mode("random")
+
+    def _on_review_home(self):
+        """Return from review page to set-selection."""
+        if self._ui_tts:
+            self._ui_tts.interrupt()
+        # Stop review recording if active
+        if self._rev_recording:
+            self._rev_stop_recording()
+        self._pages.setCurrentIndex(0)
+
+    def _load_review_mode(self, mode: str):
+        """Load question list for the given sub-mode and show first question."""
+        self._review_mode  = mode
+        self._review_speed = (mode == "speed")
+
+        if not self._review_engine:
+            return
+
+        if mode == "random":
+            qs = self._review_engine.get_random_questions()
+        elif mode == "speed":
+            qs = self._review_engine.get_all_questions()
+        elif mode == "high_freq":
+            if not self._marks_mgr:
+                QMessageBox.information(
+                    self, "提示", "标记功能不可用，请重启软件。"
+                )
+                return
+            qs = self._review_engine.get_high_freq_questions(self._marks_mgr)
+        elif mode == "weak":
+            if not self._marks_mgr:
+                QMessageBox.information(
+                    self, "提示", "标记功能不可用，请重启软件。"
+                )
+                return
+            qs = self._review_engine.get_weak_questions(self._marks_mgr)
+        else:
+            qs = self._review_engine.get_random_questions()
+
+        # Update sub-mode button styles
+        for k, btn in self._rev_mode_btns.items():
+            btn.setStyleSheet(_SUB_ON if k == mode else _SUB_OFF)
+
+        if not qs:
+            self._review_qs  = []
+            self._review_idx = 0
+            self._rev_counter_lbl.setText("0 / 0")
+            self._rev_q_title.setText("暂无题目")
+            self._rev_part_lbl.setText("")
+            self._rev_text_lbl.setText(
+                "本模式暂无题目。\n请先在随机练习或答案速背中"
+                "使用 ★标记高频 / ●标记薄弱 标记题目后再使用此模式。"
+            )
+            self._rev_content_stack.setCurrentIndex(0)
+            self._rev_sec_frame.hide()
+            self._rev_ans_frame.hide()
+            self._rev_prev_btn.setEnabled(False)
+            self._rev_next_btn.setEnabled(False)
+            return
+
+        self._review_qs  = qs
+        self._review_idx = 0
+        self._show_review_question()
+
+    def _show_review_question(self):
+        """Render the current review question (self._review_idx)."""
+        if not self._review_qs:
+            return
+
+        q   = self._review_qs[self._review_idx]
+        tot = len(self._review_qs)
+
+        self._rev_counter_lbl.setText(f"{self._review_idx + 1} / {tot}")
+        self._rev_q_title.setText(q["title"])
+        self._rev_part_lbl.setText(q["part_label"])
+
+        # Content
+        image = q.get("image", "")
+        if image:
+            self._rev_cur_image = image
+            self._rev_content_stack.setCurrentIndex(1)
+            self._load_rev_image(image)
+        else:
+            self._rev_cur_image = ""
+            self._rev_content_stack.setCurrentIndex(0)
+            self._rev_text_lbl.setText(q.get("content", ""))
+
+        # Secondary (Part 3/4)
+        sec = q.get("secondary", "")
+        if sec:
+            self._rev_sec_lbl.setText(sec)
+            self._rev_sec_frame.show()
+        else:
+            self._rev_sec_frame.hide()
+
+        # Answer area
+        raw = (q.get("answer") or "").strip()
+        if self._review_speed:
+            # Speed mode: always show answer
+            self._set_rev_answer_html(raw)
+            self._rev_ans_frame.show()
+        else:
+            self._rev_ans_frame.hide()
+
+        # Navigation buttons
+        self._rev_prev_btn.setEnabled(self._review_idx > 0)
+        self._rev_next_btn.setEnabled(self._review_idx < tot - 1)
+
+        # Mark button states
+        self._update_mark_buttons(q["id"])
+
+        # Reset recording state for this question
+        self._rev_score_btn.setEnabled(bool(self._rev_last_wav))
+
+    def _set_rev_answer_html(self, raw: str):
+        """Render answer text into the review answer QTextEdit."""
+        if raw:
+            escaped = _html.escape(raw).replace("\n", "<br>")
+            html_body = (
+                f'<p style="'
+                f'font-family: Calibri, Georgia, Arial, sans-serif;'
+                f'font-size: 13pt; color: #333333; line-height: 1.5; margin:0;">'
+                f'{escaped}</p>'
+            )
+        else:
+            html_body = (
+                '<p style="font-family:Calibri,Arial,sans-serif;'
+                'font-size:13pt;color:#888;font-style:italic;margin:0;">'
+                '（本题暂无参考答案）</p>'
+            )
+        self._rev_ans_te.setHtml(html_body)
+
+    def _rev_current_answer(self) -> str:
+        """Return the answer text of the currently displayed review question."""
+        if self._review_qs and 0 <= self._review_idx < len(self._review_qs):
+            return self._review_qs[self._review_idx].get("answer", "")
+        return ""
+
+    def _update_mark_buttons(self, qid: str):
+        """Update ★/● button styles to reflect current mark state."""
+        if not self._marks_mgr:
+            self._rev_weak_btn.setEnabled(False)
+            self._rev_hf_btn.setEnabled(False)
+            return
+        is_w  = self._marks_mgr.is_weak(qid)
+        is_hf = self._marks_mgr.is_high_freq(qid)
+        self._rev_weak_btn.setStyleSheet(_MARK_WEAK_ON if is_w  else _MARK_OFF)
+        self._rev_hf_btn.setStyleSheet(_MARK_HF_ON   if is_hf else _MARK_OFF)
+
+    # ── Review navigation ─────────────────────────────────────────────────────
+    def _on_review_prev(self):
+        if self._review_idx > 0:
+            # Stop TTS before navigating
+            if self._ui_tts:
+                self._ui_tts.interrupt()
+            self._review_idx -= 1
+            self._show_review_question()
+
+    def _on_review_next(self):
+        if self._review_idx < len(self._review_qs) - 1:
+            if self._ui_tts:
+                self._ui_tts.interrupt()
+            self._review_idx += 1
+            self._show_review_question()
+
+    # ── Review marks ──────────────────────────────────────────────────────────
+    def _on_toggle_weak(self):
+        if not self._marks_mgr or not self._review_qs:
+            return
+        qid = self._review_qs[self._review_idx]["id"]
+        is_now = self._marks_mgr.toggle_weak(qid)
+        self._rev_weak_btn.setStyleSheet(_MARK_WEAK_ON if is_now else _MARK_OFF)
+
+    def _on_toggle_high_freq(self):
+        if not self._marks_mgr or not self._review_qs:
+            return
+        qid = self._review_qs[self._review_idx]["id"]
+        is_now = self._marks_mgr.toggle_high_freq(qid)
+        self._rev_hf_btn.setStyleSheet(_MARK_HF_ON if is_now else _MARK_OFF)
+
+    # ── Review answer ─────────────────────────────────────────────────────────
+    def _on_review_show_answer(self):
+        """Toggle answer visibility in review mode."""
+        if self._rev_ans_frame.isVisible():
+            self._rev_ans_frame.hide()
+        else:
+            raw = self._rev_current_answer().strip()
+            self._set_rev_answer_html(raw)
+            self._rev_ans_frame.show()
+
+    # ── Review TTS ────────────────────────────────────────────────────────────
+    def _on_review_tts_read(self):
+        raw = self._rev_current_answer().strip()
+        if not raw:
+            QMessageBox.information(self, "提示", "本题暂无参考答案可朗读。")
+            return
+        self._get_ui_tts().speak(raw)
+
+    def _on_review_tts_stop(self):
+        if self._ui_tts:
+            self._ui_tts.interrupt()
+
+    # ── Review recording ──────────────────────────────────────────────────────
+    def _on_review_rec_toggle(self):
+        if self._rev_recording:
+            self._rev_stop_recording()
+        else:
+            self._rev_start_recording()
+
+    def _rev_start_recording(self):
+        if not self._recorder or not self._recorder.available:
+            QMessageBox.information(
+                self, "录音不可用",
+                "未检测到麦克风或 pyaudio 未安装。"
+            )
+            return
+        if not self._review_qs:
+            return
+        q   = self._review_qs[self._review_idx]
+        subdir = f"records/review/set_{q['set_id']}"
+        hint   = f"rev_{q['id'].replace(':', '_')}"
+        self._recorder.start_recording(subdir, hint)
+        self._rev_recording = True
+        self._rev_rec_dot.show()
+        self._rev_rec_btn.setText("■ 停止录音")
+        self._rev_score_btn.setEnabled(False)
+
+    def _rev_stop_recording(self):
+        if self._recorder:
+            self._recorder.stop_recording()
+            if hasattr(self._recorder, "_current_wav") and self._recorder._current_wav:
+                self._rev_last_wav = self._recorder._current_wav
+        self._rev_recording = False
+        self._rev_rec_dot.hide()
+        self._rev_rec_btn.setText("▶ 开始录音")
+        if self._rev_last_wav:
+            self._rev_score_btn.setEnabled(True)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Voice scoring  [PRO-3 / PRO-5]
+    # ─────────────────────────────────────────────────────────────────────────
+    def _on_voice_score(self, wav_path: str, answer_text: str):
+        """Trigger async voice scoring and show result dialog."""
+        if not wav_path:
+            QMessageBox.information(self, "提示", "录音文件不存在，请先完成录音。")
+            return
+
+        scorer = self._get_voice_scorer()
+
+        # Disable button while scoring
+        sender_btn = self.sender()
+        if sender_btn:
+            sender_btn.setEnabled(False)
+            sender_btn.setText("评分中…")
+
+        def _callback(result, error):
+            # Restore button on main thread
+            QTimer.singleShot(0, lambda: self._on_score_result(
+                result, error, sender_btn
+            ))
+
+        scorer.score_async(wav_path, answer_text, _callback)
+
+    def _on_score_result(self, result, error, btn):
+        """Show scoring result dialog (called on main thread)."""
+        if btn:
+            btn.setEnabled(True)
+            btn.setText("语音评分")
+
+        if error:
+            QMessageBox.warning(self, "语音评分", error)
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("语音评分结果")
+        dlg.setMinimumWidth(360)
+        dlg.setStyleSheet(f"""
+            QDialog {{ background:{_BG}; }}
+            QLabel  {{ font-size:14px; color:#333; }}
+        """)
+        vb = QVBoxLayout(dlg)
+        vb.setSpacing(10)
+        vb.setContentsMargins(24, 20, 24, 16)
+
+        title = QLabel("语音评分结果  /  Score Report")
+        title.setStyleSheet(f"font-size:16px; font-weight:bold; color:{_BLUE};")
+        vb.addWidget(title)
+
+        scores = [
+            ("发音准确度  Pronunciation",  result.get("pronunciation", 0)),
+            ("流利度  Fluency",            result.get("fluency",       0)),
+            ("内容完整性  Completeness",   result.get("completeness",  0)),
+            ("综合得分  Overall",          result.get("overall",       0)),
+        ]
+        for label, score in scores:
+            row = QHBoxLayout()
+            lbl = QLabel(label)
+            sc  = QLabel(f"{score:.1f}")
+            sc.setStyleSheet(
+                f"font-size:22px; font-weight:bold; color:{_BLUE};"
+            )
+            row.addWidget(lbl)
+            row.addStretch()
+            row.addWidget(sc)
+            vb.addLayout(row)
+
+        close = QPushButton("关闭")
+        close.setStyleSheet(_BTN_SM)
         close.clicked.connect(dlg.accept)
         vb.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
 
@@ -697,10 +1460,33 @@ class MainWindow(QMainWindow):
                       Qt.TransformationMode.SmoothTransformation)
         )
 
+    def _load_rev_image(self, path: str):
+        """Load image for review content stack."""
+        import os as _os
+        if not _os.path.isabs(path):
+            from engine import ExamEngine  # noqa: F401 (just to get base_dir)
+            path = _os.path.join(self._engine._base_dir, path)
+        pm = QPixmap(path)
+        if pm.isNull():
+            self._rev_content_stack.setCurrentIndex(0)
+            self._rev_text_lbl.setText(f"[Image not found: {path}]")
+            return
+        w = max(self._rev_img_lbl.width() - 20, 500)
+        h = max(self._rev_img_lbl.height() - 20, 350)
+        self._rev_img_lbl.setPixmap(
+            pm.scaled(w, h,
+                      Qt.AspectRatioMode.KeepAspectRatio,
+                      Qt.TransformationMode.SmoothTransformation)
+        )
+
     def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
         if self._content_stack.currentIndex() == 1 and self._current_image:
             self._load_image(self._current_image)
+        if (self._pages.currentIndex() == 3
+                and self._rev_content_stack.currentIndex() == 1
+                and self._rev_cur_image):
+            self._load_rev_image(self._rev_cur_image)
 
     def keyPressEvent(self, event: QKeyEvent):
         """Ctrl+Shift+T → developer unlock dialog."""
@@ -751,6 +1537,30 @@ class MainWindow(QMainWindow):
                 "color: rgba(255,255,200,0.85); font-size:11px; padding-left:16px;"
             )
         self._trial_lbl.show()
+
+    def _on_update_bank(self):
+        """更新题库：选择 Excel/CSV 文件覆盖本地题库，重启后生效。"""
+        import shutil
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择新题库文件", "",
+            "题库文件 (*.xlsx *.csv);;所有文件 (*)"
+        )
+        if not path:
+            return
+        base = self._engine._base_dir
+        ext  = os.path.splitext(path)[1].lower()
+        if ext == ".xlsx":
+            dest = os.path.join(base, "question_bank.xlsx")
+        else:
+            dest = os.path.join(base, "question_bank.csv")
+        try:
+            shutil.copy2(path, dest)
+            QMessageBox.information(
+                self, "题库更新成功",
+                f"题库已更新为：\n{os.path.basename(path)}\n\n请重启软件使新题库生效。"
+            )
+        except Exception as exc:
+            QMessageBox.warning(self, "更新失败", f"文件复制失败：{exc}")
 
     def _on_dev_unlock(self):
         """Ctrl+Shift+T handler — prompt for developer password."""

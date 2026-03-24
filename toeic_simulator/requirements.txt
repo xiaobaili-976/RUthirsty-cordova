@@ -3,4 +3,5 @@ pyttsx3>=2.90
 pyaudio>=0.2.14
 vosk>=0.3.45
 openpyxl>=3.1.0
+websocket-client>=1.6.0
 pyinstaller>=6.0.0

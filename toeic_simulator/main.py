@@ -1,4 +1,4 @@
-"""Entry point — TOEIC Speaking Test Simulator (Professional Edition)."""
+"""Entry point — TOEIC Speaking Pro."""
 import sys
 import os
 
@@ -14,6 +14,8 @@ from engine          import ExamEngine
 from recorder        import RecorderManager
 from window          import MainWindow
 from license_manager import LicenseManager
+from marks_manager   import MarksManager
+from review_engine   import ReviewEngine
 
 
 def main():
@@ -21,7 +23,7 @@ def main():
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
     app = QApplication(sys.argv)
-    app.setApplicationName("TOEIC Speaking Test Simulator")
+    app.setApplicationName("TOEIC Speaking Pro")
 
     # Global tooltip style — 微软雅黑 12 px, white text, no background box
     app.setStyleSheet("""
@@ -38,8 +40,16 @@ def main():
     engine      = ExamEngine(BASE_DIR)
     recorder    = RecorderManager(BASE_DIR)
     license_mgr = LicenseManager(BASE_DIR)
+    marks_mgr   = MarksManager(BASE_DIR)
+    rev_engine  = ReviewEngine(engine)
 
-    win = MainWindow(engine, recorder, license_mgr=license_mgr)
+    win = MainWindow(
+        engine,
+        recorder,
+        license_mgr=license_mgr,
+        marks_mgr=marks_mgr,
+        review_engine=rev_engine,
+    )
     win.show()
 
     sys.exit(app.exec())
