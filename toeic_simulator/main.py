@@ -9,6 +9,7 @@ else:
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon
 
 from engine          import ExamEngine
 from recorder        import RecorderManager
@@ -24,6 +25,11 @@ def main():
     )
     app = QApplication(sys.argv)
     app.setApplicationName("TOEIC Speaking Pro")
+
+    # Application icon (taskbar + title bar)
+    _ico = os.path.join(BASE_DIR, "app_icon.ico")
+    if os.path.isfile(_ico):
+        app.setWindowIcon(QIcon(_ico))
 
     # Global tooltip style — 微软雅黑 12 px, white text, no background box
     app.setStyleSheet("""

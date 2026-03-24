@@ -18,6 +18,8 @@ Changes vs v3 (original preserved, incremental additions only)
 """
 import html as _html
 import os
+import threading
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -249,6 +251,53 @@ def _make_book_qicon() -> QIcon:
     return QIcon(pm)
 
 
+class _WAVPlayer:
+    """Simple stop-able WAV playback in a background thread (pyaudio-based)."""
+
+    def __init__(self):
+        self._playing = False
+
+    def play(self, wav_path: str, *, on_done=None):
+        """Start playback; stops any ongoing playback first."""
+        self.stop()
+        self._playing = True
+        threading.Thread(
+            target=self._loop, args=(wav_path, on_done), daemon=True
+        ).start()
+
+    def stop(self):
+        self._playing = False
+
+    def is_playing(self) -> bool:
+        return self._playing
+
+    def _loop(self, wav_path: str, on_done):
+        try:
+            import wave
+            import pyaudio
+            with wave.open(wav_path, "rb") as wf:
+                pa = pyaudio.PyAudio()
+                stream = pa.open(
+                    format=pa.get_format_from_width(wf.getsampwidth()),
+                    channels=wf.getnchannels(),
+                    rate=wf.getframerate(),
+                    output=True,
+                )
+                data = wf.readframes(1024)
+                while data and self._playing:
+                    stream.write(data)
+                    data = wf.readframes(1024)
+                stream.stop_stream()
+                stream.close()
+                pa.terminate()
+        except Exception as exc:
+            print(f"[WAVPlayer] {exc}")
+        finally:
+            self._playing = False
+            if on_done:
+                QTimer.singleShot(0, on_done)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, engine, recorder, license_mgr=None,
                  marks_mgr=None, review_engine=None):
@@ -276,6 +325,15 @@ class MainWindow(QMainWindow):
 
         # [PRO] Voice scorer
         self._voice_scorer = None   # created on first use
+
+        # [OPT-1] WAV player for recording playback
+        self._wav_player = _WAVPlayer()
+
+        # [OPT-4] Exam session tracking (for end-report)
+        self._exam_start_time:       datetime | None = None
+        self._exam_part_recordings:  dict = {}   # part_num(1-5) → recording count
+        self._exam_is_part_mode:     bool = False
+        self._exam_part_mode_num:    int  = 0
 
         # Activation state flag (set to True once permanently activated)
         self._activated = (
@@ -474,6 +532,26 @@ class MainWindow(QMainWindow):
         btn_row.addStretch()
         lay.addLayout(btn_row)
 
+        # [OPT-2] Secondary row: part training + mic test
+        btn_row2 = QHBoxLayout()
+        btn_row2.setSpacing(16)
+        btn_row2.addStretch()
+
+        part_train_btn = QPushButton("专项训练  /  Part Practice")
+        part_train_btn.setStyleSheet(_BTN_SM)
+        part_train_btn.setToolTip("选择单独练习 Part 1–5")
+        part_train_btn.clicked.connect(self._on_part_training)
+        btn_row2.addWidget(part_train_btn)
+
+        mic_test_btn = QPushButton("麦克风试音")
+        mic_test_btn.setStyleSheet(_BTN_SM)
+        mic_test_btn.setToolTip("录制 3 秒并自动回放，检测麦克风是否正常")
+        mic_test_btn.clicked.connect(self._on_mic_test)
+        btn_row2.addWidget(mic_test_btn)
+
+        btn_row2.addStretch()
+        lay.addLayout(btn_row2)
+
         return page
 
     # ── Exam page ─────────────────────────────────────────────────────────────
@@ -591,6 +669,15 @@ class MainWindow(QMainWindow):
         )
         tb.addWidget(self._score_btn)
 
+        # [OPT-1] Replay button — enabled after recording; toggles play/stop
+        tb.addSpacing(8)
+        self._replay_btn = QPushButton("回放录音")
+        self._replay_btn.setStyleSheet(_SKIP_BTN)
+        self._replay_btn.setEnabled(False)
+        self._replay_btn.setToolTip("回放最近一次录音（不影响计时）")
+        self._replay_btn.clicked.connect(self._on_replay_toggle)
+        tb.addWidget(self._replay_btn)
+
         lay.addWidget(tbar)
         return page
 
@@ -599,35 +686,52 @@ class MainWindow(QMainWindow):
         page = QWidget()
         page.setStyleSheet(f"background:{_BG};")
         lay = QVBoxLayout(page)
-        lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.setSpacing(16)
+        lay.setContentsMargins(80, 36, 80, 36)
+        lay.setSpacing(12)
 
         t = QLabel("Test Complete  /  考试结束")
-        t.setStyleSheet(f"font-size:42px; font-weight:bold; color:{_BLUE};")
+        t.setStyleSheet(f"font-size:38px; font-weight:bold; color:{_BLUE};")
         t.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(t)
 
-        self._end_msg = QLabel("")
-        self._end_msg.setStyleSheet("font-size:16px; color:#444;")
-        self._end_msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._end_msg.setWordWrap(True)
-        lay.addWidget(self._end_msg)
+        # [OPT-4] Report area — rich text, scrollable
+        self._report_te = QTextEdit()
+        self._report_te.setReadOnly(True)
+        self._report_te.setMinimumHeight(200)
+        self._report_te.setStyleSheet(f"""
+            QTextEdit {{
+                background:{_LIGHT}; border:1px solid {_BORDER};
+                border-radius:7px; font-size:14px; color:#333;
+                padding:12px;
+            }}
+        """)
+        lay.addWidget(self._report_te, 1)
 
-        lay.addSpacing(40)
+        lay.addSpacing(12)
 
         row = QHBoxLayout()
-        row.setSpacing(20)
+        row.setSpacing(16)
+        row.addStretch()
 
         restart = QPushButton("重新选择套题  /  Choose Again")
         restart.setStyleSheet(_BTN_SM)
         restart.clicked.connect(self._on_restart)
         row.addWidget(restart)
 
+        # [OPT-1] End-page replay button
+        self._end_replay_btn = QPushButton("回放最近录音")
+        self._end_replay_btn.setStyleSheet(_BTN_SM)
+        self._end_replay_btn.setEnabled(False)
+        self._end_replay_btn.setToolTip("回放本次考试最后一段录音")
+        self._end_replay_btn.clicked.connect(self._on_end_replay_toggle)
+        row.addWidget(self._end_replay_btn)
+
         quit_b = QPushButton("退出程序")
         quit_b.setStyleSheet(_BTN_SM)
         quit_b.clicked.connect(self.close)
         row.addWidget(quit_b)
 
+        row.addStretch()
         lay.addLayout(row)
         return page
 
@@ -924,6 +1028,12 @@ class MainWindow(QMainWindow):
         self._current_answer = ""
         self._last_wav_path  = ""         # [PRO] reset last WAV
         self._score_btn.setEnabled(False) # [PRO] reset score button
+        self._replay_btn.setEnabled(False)  # [OPT-1]
+        # [OPT-4] init exam tracking
+        self._exam_start_time      = datetime.now()
+        self._exam_part_recordings = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        self._exam_is_part_mode    = False
+        self._exam_part_mode_num   = 0
         # show both header buttons when entering exam
         self._home_btn.show()
         self._ans_btn.show()
@@ -932,6 +1042,7 @@ class MainWindow(QMainWindow):
 
     def _on_restart(self):
         """Return from end page to set-selection."""
+        self._wav_player.stop()
         self._home_btn.hide()
         self._ans_btn.hide()
         self._rec_dot.hide()
@@ -946,6 +1057,9 @@ class MainWindow(QMainWindow):
         if self._is_recording:
             self._on_rec_stop()
 
+        # Stop playback
+        self._wav_player.stop()
+
         # Abort the exam engine (stops timer / interrupts TTS)
         self._engine.abort()
 
@@ -956,24 +1070,17 @@ class MainWindow(QMainWindow):
         self._countdown_lbl.setText("")
         self._phase_lbl.setText("")
         self._skip_btn.setEnabled(False)
+        self._replay_btn.setEnabled(False)  # [OPT-1]
         self._pages.setCurrentIndex(0)
 
     def _on_end(self):
         self._rec_dot.hide()
         self._home_btn.hide()
         self._ans_btn.hide()
-        set_name = ""
-        items = self._set_list.selectedItems()
-        if items:
-            set_name = items[0].text().strip()
-        msg = (f"您已完成「{set_name}」的全部题目练习。\n\n"
-               "录音文件已保存至 records/ 文件夹。")
-        if self._recorder and self._recorder.available and self._recorder._model:
-            msg += "\n语音转写文本已同步保存（.txt 文件）。"
-        elif self._recorder and self._recorder.available:
-            msg += ("\n（提示：将 vosk 模型放入 model/ 文件夹可启用"
-                    "语音转文字功能）")
-        self._end_msg.setText(msg)
+        # Enable end-page replay if there's a recording
+        self._end_replay_btn.setEnabled(bool(self._last_wav_path))
+        # Generate and display report
+        self._report_te.setHtml(self._generate_exam_report())
         self._pages.setCurrentIndex(2)
 
     @pyqtSlot(dict)
@@ -1028,6 +1135,17 @@ class MainWindow(QMainWindow):
         self._rec_dot.show()
         self._is_recording   = True
         self._score_btn.setEnabled(False)   # [PRO] disable while recording
+        self._replay_btn.setEnabled(False)  # [OPT-1] disable replay during recording
+        # [OPT-4] track part recordings by hint prefix "p1_", "p2_", …
+        try:
+            if hint and hint[0] == "p" and hint[1].isdigit():
+                pn = int(hint[1])
+                if 1 <= pn <= 5 and hasattr(self, "_exam_part_recordings"):
+                    self._exam_part_recordings[pn] = (
+                        self._exam_part_recordings.get(pn, 0) + 1
+                    )
+        except (IndexError, ValueError):
+            pass
 
     @pyqtSlot()
     def _on_rec_stop(self):
@@ -1041,10 +1159,344 @@ class MainWindow(QMainWindow):
         # [PRO] enable voice scoring after recording
         if self._last_wav_path:
             self._score_btn.setEnabled(True)
+        # [OPT-1] enable replay after recording
+        self._replay_btn.setEnabled(bool(self._last_wav_path))
 
     @pyqtSlot(str, str)
     def _on_transcription(self, wav_path: str, text: str):
         print(f"[Window] Transcript ready for {os.path.basename(wav_path)}")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # [OPT-1] Audio replay  ───────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+    def _on_replay_toggle(self):
+        """Toggle exam-page playback of the last recording."""
+        if self._wav_player.is_playing():
+            self._wav_player.stop()
+            self._replay_btn.setText("回放录音")
+        else:
+            if not self._last_wav_path or not os.path.isfile(self._last_wav_path):
+                return
+            self._replay_btn.setText("停止回放")
+            self._wav_player.play(
+                self._last_wav_path,
+                on_done=lambda: (
+                    self._replay_btn.setText("回放录音")
+                    if self._replay_btn else None
+                ),
+            )
+
+    def _on_end_replay_toggle(self):
+        """Toggle end-page playback of the last recording."""
+        if self._wav_player.is_playing():
+            self._wav_player.stop()
+            self._end_replay_btn.setText("回放最近录音")
+        else:
+            if not self._last_wav_path or not os.path.isfile(self._last_wav_path):
+                return
+            self._end_replay_btn.setText("停止回放")
+            self._wav_player.play(
+                self._last_wav_path,
+                on_done=lambda: (
+                    self._end_replay_btn.setText("回放最近录音")
+                    if self._end_replay_btn else None
+                ),
+            )
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # [OPT-2] Mic test  ───────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+    def _on_mic_test(self):
+        """3-second mic test — record then auto-playback in an isolated dialog."""
+        if not self._recorder or not self._recorder.available:
+            QMessageBox.information(
+                self, "麦克风不可用",
+                "未检测到麦克风或 pyaudio 未安装。\n请检查设备连接后重试。",
+            )
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("麦克风试音")
+        dlg.setMinimumWidth(380)
+        dlg.setStyleSheet(f"QDialog {{ background:{_BG}; }}")
+        vb = QVBoxLayout(dlg)
+        vb.setContentsMargins(24, 20, 24, 16)
+        vb.setSpacing(10)
+
+        title_lbl = QLabel("麦克风试音检测")
+        title_lbl.setStyleSheet(
+            f"font-size:16px; font-weight:bold; color:{_BLUE};"
+        )
+        vb.addWidget(title_lbl)
+
+        status_lbl = QLabel('点击 "开始试音" 录制 3 秒，然后自动回放。')
+        status_lbl.setStyleSheet("font-size:13px; color:#555;")
+        status_lbl.setWordWrap(True)
+        vb.addWidget(status_lbl)
+
+        count_lbl = QLabel("")
+        count_lbl.setStyleSheet(
+            f"font-size:36px; font-weight:bold; color:{_BLUE};"
+        )
+        count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        count_lbl.setMinimumHeight(52)
+        vb.addWidget(count_lbl)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(12)
+        start_btn = QPushButton("开始试音")
+        start_btn.setStyleSheet(_BTN_SM)
+        close_btn = QPushButton("关闭")
+        close_btn.setStyleSheet(_BTN_SM)
+        btn_row.addStretch()
+        btn_row.addWidget(start_btn)
+        btn_row.addWidget(close_btn)
+        btn_row.addStretch()
+        vb.addLayout(btn_row)
+
+        # Internal state (mutable dict so closures can mutate)
+        state: dict = {"phase": "idle", "countdown": 3,
+                       "wav_path": "", "qtimer": None}
+
+        def _start():
+            state["phase"] = "recording"
+            state["countdown"] = 3
+            start_btn.setEnabled(False)
+            status_lbl.setText("正在录音中，请对着麦克风说话…")
+            count_lbl.setText("3")
+            self._recorder.start_recording("records/mic_test", "mic_test")
+            state["wav_path"] = self._recorder._current_wav or ""
+            qt = QTimer(dlg)
+            state["qtimer"] = qt
+            qt.setInterval(1000)
+
+            def _tick():
+                state["countdown"] -= 1
+                count_lbl.setText(str(max(state["countdown"], 0)))
+                if state["countdown"] <= 0:
+                    qt.stop()
+                    _stop_and_play()
+
+            qt.timeout.connect(_tick)
+            qt.start()
+
+        def _stop_and_play():
+            self._recorder.stop_recording()
+            state["phase"] = "playing"
+            status_lbl.setText("录音完成，正在回放…")
+            count_lbl.setText("")
+            QTimer.singleShot(600, _do_play)
+
+        def _do_play():
+            wav = state["wav_path"]
+            if not wav or not os.path.isfile(wav):
+                status_lbl.setText("⚠ 录音文件未生成，请检查麦克风连接。")
+                start_btn.setEnabled(True)
+                state["phase"] = "idle"
+                return
+            self._wav_player.play(wav, on_done=_play_done)
+
+        def _play_done():
+            status_lbl.setText(
+                "✓ 试音完成！若您听到了自己的声音，说明麦克风工作正常。"
+            )
+            count_lbl.setText("")
+            start_btn.setEnabled(True)
+            state["phase"] = "idle"
+
+        def _cleanup(_=None):
+            if state["phase"] == "recording":
+                if state["qtimer"]:
+                    state["qtimer"].stop()
+                self._recorder.stop_recording()
+            self._wav_player.stop()
+
+        start_btn.clicked.connect(_start)
+        close_btn.clicked.connect(dlg.accept)
+        dlg.finished.connect(_cleanup)
+        dlg.exec()
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # [OPT-3] Single-PART training  ───────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+    def _on_part_training(self):
+        """Show PART selection dialog then launch single-PART practice."""
+        if not self._require_license():
+            return
+        items = self._set_list.selectedItems()
+        if not items:
+            QMessageBox.warning(self, "提示", "请先选择一套题目。")
+            return
+        set_id = items[0].data(Qt.ItemDataRole.UserRole)
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("专项训练 — 选择练习部分")
+        dlg.setMinimumWidth(360)
+        dlg.setStyleSheet(f"QDialog {{ background:{_BG}; }}")
+        vb = QVBoxLayout(dlg)
+        vb.setContentsMargins(24, 20, 24, 16)
+        vb.setSpacing(10)
+
+        title_lbl = QLabel("选择要单独练习的 PART")
+        title_lbl.setStyleSheet(
+            f"font-size:16px; font-weight:bold; color:{_BLUE};"
+        )
+        vb.addWidget(title_lbl)
+
+        hint_lbl = QLabel(
+            "专项训练复用完整模考的计时规则，仅运行所选部分。"
+        )
+        hint_lbl.setStyleSheet("font-size:12px; color:#777;")
+        hint_lbl.setWordWrap(True)
+        vb.addWidget(hint_lbl)
+
+        parts = [
+            (1, "Part 1 — 朗读文章",   "Q1–2 · 45 s 准备 + 45 s 作答"),
+            (2, "Part 2 — 描述图片",   "Q3–4 · 45 s 准备 + 30 s 作答"),
+            (3, "Part 3 — 回答问题",   "Q5–7 · 3 s 准备 + 15/30 s 作答"),
+            (4, "Part 4 — 信息问答",   "Q8–10 · 45 s 准备 + 15/30 s 作答"),
+            (5, "Part 5 — 发表意见",   "Q11 · 45 s 准备 + 60 s 作答"),
+        ]
+
+        selected = [None]
+
+        def _pick(pn):
+            selected[0] = pn
+            dlg.accept()
+
+        for pnum, label, sub in parts:
+            btn = QPushButton(f"{label}\n{sub}")
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background:{_LIGHT}; color:{_BLUE};
+                    font-size:14px; font-weight:bold;
+                    padding:10px 16px; border-radius:6px;
+                    border:1.5px solid {_BORDER};
+                    text-align:left;
+                }}
+                QPushButton:hover {{ background:{_HI}; border-color:{_BLUE}; }}
+            """)
+            btn.clicked.connect(lambda _=False, p=pnum: _pick(p))
+            vb.addWidget(btn)
+
+        cancel_btn = QPushButton("取消")
+        cancel_btn.setStyleSheet(_BTN_SM)
+        cancel_btn.clicked.connect(dlg.reject)
+        vb.addWidget(cancel_btn, 0, Qt.AlignmentFlag.AlignRight)
+
+        dlg.exec()
+
+        if selected[0] is not None:
+            self._start_part_training(set_id, selected[0])
+
+    def _start_part_training(self, set_id: int, part_num: int):
+        """Launch the exam page in single-PART training mode."""
+        self._current_answer = ""
+        self._last_wav_path  = ""
+        self._score_btn.setEnabled(False)
+        self._replay_btn.setEnabled(False)
+        self._exam_start_time      = datetime.now()
+        self._exam_part_recordings = {1: 0, 2: 0, 3: 0, 4: 0, 5: 0}
+        self._exam_is_part_mode    = True
+        self._exam_part_mode_num   = part_num
+        self._home_btn.show()
+        self._ans_btn.show()
+        self._pages.setCurrentIndex(1)
+        self._engine.start_part_exam(set_id, part_num)
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # [OPT-4] End-page exam report  ───────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────────────────
+    def _generate_exam_report(self) -> str:
+        """Build an HTML report string for the end page."""
+        lines: list[str] = []
+        c = _BLUE  # accent colour
+
+        lines.append(f'<h3 style="color:{c}; margin:0 0 10px 0;">考试结束报告</h3>')
+
+        # ── Mode & set ────────────────────────────────────────────────────────
+        if getattr(self, "_exam_is_part_mode", False):
+            pn = getattr(self, "_exam_part_mode_num", 0)
+            pnames = {1: "Part 1 朗读文章", 2: "Part 2 描述图片",
+                      3: "Part 3 回答问题", 4: "Part 4 信息问答",
+                      5: "Part 5 发表意见"}
+            mode_str = f"专项训练 — {pnames.get(pn, f'Part {pn}')}"
+        else:
+            items = self._set_list.selectedItems()
+            set_name = items[0].text().strip() if items else ""
+            mode_str = f"完整模考" + (f" 「{set_name}」" if set_name else "")
+        lines.append(f'<p style="margin:4px 0;"><b>训练模式：</b>{mode_str}</p>')
+
+        # ── Elapsed time ──────────────────────────────────────────────────────
+        if self._exam_start_time:
+            elapsed = datetime.now() - self._exam_start_time
+            total_s = int(elapsed.total_seconds())
+            mins, secs = divmod(total_s, 60)
+            lines.append(
+                f'<p style="margin:4px 0;"><b>考试用时：</b>{mins} 分 {secs} 秒</p>'
+            )
+
+        # ── Part recording status ─────────────────────────────────────────────
+        expected = {1: 2, 2: 2, 3: 3, 4: 3, 5: 1}
+        pnames2 = {
+            1: "Part 1 朗读文章",
+            2: "Part 2 描述图片",
+            3: "Part 3 回答问题",
+            4: "Part 4 信息问答",
+            5: "Part 5 发表意见",
+        }
+        lines.append('<p style="margin:8px 0 4px 0;"><b>各 PART 录音情况：</b></p>')
+        lines.append('<table style="width:100%; border-spacing:0 4px;">')
+
+        weak_parts: list[str] = []
+        for pn in range(1, 6):
+            # In part-mode, skip parts not involved
+            if (self._exam_is_part_mode
+                    and pn != self._exam_part_mode_num):
+                continue
+            actual = self._exam_part_recordings.get(pn, 0)
+            exp    = expected[pn]
+            if actual >= exp:
+                badge = (f'<span style="color:green;">✓ 全部完成 '
+                         f'({actual}/{exp})</span>')
+            elif actual > 0:
+                badge = (f'<span style="color:#E68A00;">⚠ 部分完成 '
+                         f'({actual}/{exp})</span>')
+                weak_parts.append(pnames2[pn])
+            else:
+                badge = (f'<span style="color:red;">✗ 未录音 '
+                         f'(0/{exp})</span>')
+                weak_parts.append(pnames2[pn])
+            lines.append(
+                f'<tr><td style="padding:2px 0; width:55%;">'
+                f'{pnames2[pn]}</td>'
+                f'<td>{badge}</td></tr>'
+            )
+        lines.append('</table>')
+
+        # ── Suggestions ───────────────────────────────────────────────────────
+        if weak_parts:
+            wp_str = "、".join(weak_parts)
+            lines.append(
+                f'<p style="margin:8px 0 0 0; color:#CC4400;">'
+                f'<b>建议加强：</b>{wp_str}</p>'
+            )
+        else:
+            lines.append(
+                '<p style="margin:8px 0 0 0; color:green;">'
+                '<b>✓ 全部录音已完成！</b></p>'
+            )
+
+        # ── STT hint ──────────────────────────────────────────────────────────
+        lines.append(
+            '<p style="margin:8px 0 0 0; color:#888; font-size:12px;">'
+            '录音文件已保存至 records/ 文件夹。'
+        )
+        if self._recorder and self._recorder.available and self._recorder._model:
+            lines.append("语音转写文本已同步保存（.txt 文件）。")
+        lines.append('</p>')
+
+        return "".join(lines)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Answer dialog  [OPT-1 + PRO-4]
@@ -1766,17 +2218,17 @@ class MainWindow(QMainWindow):
         Called once on init and again after successful activation / dev unlock.
         """
         if self._license is None:
-            # No license manager — show exit button only
+            # No license manager — hide both; native × is sufficient
             self._settings_btn.hide()
-            self._exit_btn.show()
+            self._exit_btn.hide()
             return
 
         if self._license.is_unlocked() and (
             self._license.is_dev_mode() or self._license._check_license_file()
         ):
-            # Permanently activated or dev mode → exit button only
+            # Permanently activated or dev mode → hide both; use native window × to close
             self._settings_btn.hide()
-            self._exit_btn.show()
+            self._exit_btn.hide()
             self._trial_lbl.hide()
         else:
             # Trial (active or expired) → gear settings button

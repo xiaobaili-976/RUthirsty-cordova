@@ -171,6 +171,104 @@ def _build_steps(set_data: dict, set_id: int, base_dir: str) -> list[dict]:
     return steps
 
 
+def _build_part_steps(set_data: dict, set_id: int, base_dir: str, part_num: int) -> list[dict]:
+    """Build exam steps for a single PART (1–5) only — same timing rules as full exam."""
+
+    def scr(title="", content="", secondary="", image="", answer=""):
+        return {"type": "screen", "title": title, "content": content,
+                "secondary": secondary, "image": image, "answer": answer}
+
+    def t(text):
+        return {"type": "tts", "text": text}
+
+    def tm(duration, phase=""):
+        return {"type": "timer", "duration": duration, "phase": phase}
+
+    def sa(answer):
+        return {"type": "set_answer", "answer": answer}
+
+    def rs(hint):
+        return {"type": "record_start",
+                "subdir": f"records/set_{set_id}",
+                "hint":   hint}
+
+    rs_stop = {"type": "record_stop"}
+    PREP, RESP = "Preparation Time", "Response Time"
+    steps: list[dict] = []
+
+    if part_num == 1:
+        steps += [scr("Part 1 — 朗读文章  Read a text aloud", _PART1_INTRO), t(_PART1_INTRO)]
+        for i, item in enumerate((set_data.get("part1") or [])[:2], 1):
+            steps += [
+                scr(f"Question {i} of 2  (Part 1)", item.get("text", ""),
+                    answer=item.get("answer", "")),
+                t(_BEGIN_PREPARING), tm(45, PREP), t(_BEGIN_READING),
+                rs(f"p1_q{i}"), tm(45, RESP), rs_stop,
+            ]
+
+    elif part_num == 2:
+        steps += [scr("Part 2 — 描述图片  Describe a picture", _PART2_INTRO), t(_PART2_INTRO)]
+        for i, item in enumerate((set_data.get("part2") or [])[:2], 3):
+            raw = item.get("image", "")
+            img = raw if os.path.isabs(raw) else os.path.join(base_dir, raw)
+            steps += [
+                scr(f"Question {i - 2} of 2  (Part 2)", image=img,
+                    answer=item.get("answer", "")),
+                t(_BEGIN_PREPARING), tm(45, PREP), t(_BEGIN_SPEAKING),
+                rs(f"p2_q{i}"), tm(30, RESP), rs_stop,
+            ]
+
+    elif part_num == 3:
+        steps += [scr("Part 3 — 回答问题  Respond to questions", _PART3_INTRO), t(_PART3_INTRO)]
+        p3   = set_data.get("part3") or {}
+        bg   = p3.get("background", "")
+        p3qs = (p3.get("questions") or [])[:3]
+        steps += [scr("Part 3  Questions 1–3", bg), t(bg)]
+        for idx, (q_num, dur) in enumerate([(5, 15), (6, 15), (7, 30)]):
+            if idx < len(p3qs):
+                qt  = p3qs[idx].get("text", "")
+                ans = p3qs[idx].get("answer", "")
+                steps += [
+                    {"type": "screen", "title": f"Question {idx + 1} of 3  (Part 3)",
+                     "content": bg, "secondary": qt, "image": "", "answer": ans},
+                    t(qt), t(_BEGIN_PREPARING), tm(3, PREP), t(_BEGIN_SPEAKING),
+                    rs(f"p3_q{q_num}"), tm(dur, RESP), rs_stop,
+                ]
+
+    elif part_num == 4:
+        steps += [
+            scr("Part 4 — 信息问答  Respond using information provided", _PART4_INTRO),
+            t(_PART4_INTRO),
+        ]
+        p4   = set_data.get("part4") or {}
+        info = p4.get("info", "")
+        p4qs = (p4.get("questions") or [])[:3]
+        steps += [scr("Part 4  Questions 1–3", info), t(_BEGIN_PREPARING), tm(45, PREP)]
+        for idx, (q_num, dur) in enumerate([(8, 15), (9, 15), (10, 30)]):
+            if idx < len(p4qs):
+                qt   = p4qs[idx].get("text", "")
+                ans  = p4qs[idx].get("answer", "")
+                plays = [t(qt), t(qt)] if q_num == 10 else [t(qt)]
+                steps += [sa(ans)] + plays + [
+                    t(_BEGIN_PREPARING), tm(3, PREP), t(_BEGIN_SPEAKING),
+                    rs(f"p4_q{q_num}"), tm(dur, RESP), rs_stop,
+                ]
+
+    elif part_num == 5:
+        steps += [scr("Part 5 — 发表意见  Express an opinion", _PART5_INTRO), t(_PART5_INTRO)]
+        p5   = set_data.get("part5") or {}
+        q11  = p5.get("text", "")
+        ans5 = p5.get("answer", "")
+        steps += [
+            scr("Question 1 of 1  (Part 5)", q11, answer=ans5),
+            t(q11), t(_BEGIN_PREPARING), tm(45, PREP), t(_BEGIN_SPEAKING),
+            rs("p5_q11"), tm(60, RESP), rs_stop,
+        ]
+
+    steps.append({"type": "end"})
+    return steps
+
+
 # ── Default bank (fallback) ──────────────────────────────────────────────────
 def _default_bank() -> dict:
     return {"sets": [{"id": 1, "name": "Default Set",
@@ -287,6 +385,24 @@ class ExamEngine(QObject):
         sid = self._set_data.get("id", 1)
         self._steps = _build_steps(self._set_data, sid, self._base_dir)
         self._idx   = 0
+        self._run()
+
+    def start_part_exam(self, set_id: int, part_num: int) -> None:
+        """Start practice for a single PART (1–5) using the same timing rules."""
+        self._countdown.stop()
+        self._set_data = None
+        for s in self._bank.get("sets", []):
+            if s.get("id") == set_id:
+                self._set_data = s
+                break
+        if self._set_data is None:
+            if self._bank.get("sets"):
+                self._set_data = self._bank["sets"][0]
+            else:
+                self._set_data = _default_bank()["sets"][0]
+        sid = self._set_data.get("id", 1)
+        self._steps = _build_part_steps(self._set_data, sid, self._base_dir, part_num)
+        self._idx = 0
         self._run()
 
     def skip(self) -> None:
