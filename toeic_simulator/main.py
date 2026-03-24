@@ -9,7 +9,7 @@ else:
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QFont
+from PyQt6.QtGui import QIcon
 
 from engine          import ExamEngine
 from recorder        import RecorderManager
@@ -24,8 +24,6 @@ def main():
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
     app = QApplication(sys.argv)
-    # Global base font: Microsoft YaHei (Windows CJK standard, crisp at any DPI)
-    app.setFont(QFont("Microsoft YaHei", 10))
     app.setApplicationName("TOEIC Speaking Pro")
 
     # Application icon (taskbar + title bar)

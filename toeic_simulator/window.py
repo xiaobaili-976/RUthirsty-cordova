@@ -820,18 +820,17 @@ class MainWindow(QMainWindow):
 
         # ── Top tab bar ────────────────────────────────────────────────────
         top_bar = QFrame()
-        top_bar.setFixedHeight(52)
+        top_bar.setFixedHeight(60)
         top_bar.setStyleSheet(
             f"background:{_BG}; border-bottom:2px solid {_BORDER};"
         )
         top_lay = QHBoxLayout(top_bar)
-        top_lay.setContentsMargins(16, 0, 16, 0)
+        top_lay.setContentsMargins(16, 8, 16, 8)
         top_lay.setSpacing(0)
 
         # Back to home
-        back_btn = QPushButton("← 首页")
+        back_btn = QPushButton("← 返回首页")
         back_btn.setStyleSheet(_BTN_SM)
-        back_btn.setFixedHeight(32)
         back_btn.clicked.connect(self._on_review_home)
         top_lay.addWidget(back_btn)
 
