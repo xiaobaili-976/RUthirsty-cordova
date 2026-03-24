@@ -386,6 +386,7 @@ class MainWindow(QMainWindow):
         self._current_answer = ""
         self._is_recording   = False
         self._last_wav_path  = ""               # [PRO] last WAV for voice scoring
+        self._replay_display_paused: bool = False  # freeze display only during replay
 
         # [PRO] Review-mode state
         self._review_qs:     list  = []   # current question list
@@ -496,6 +497,7 @@ class MainWindow(QMainWindow):
             "padding-left: 16px;"
         )
         lay.addWidget(self._trial_lbl)
+        self._trial_lbl.hide()   # always hidden; shown only in settings dropdown
 
         lay.addStretch()
 
@@ -1178,6 +1180,9 @@ class MainWindow(QMainWindow):
     @pyqtSlot(int, str)
     def _on_timer(self, seconds: int, phase: str):
         """[OPT-2] Timer updates only the bottom bar — no header label."""
+        # Display frozen during replay; engine timer continues unaffected
+        if self._replay_display_paused:
+            return
         if seconds < 0:
             self._countdown_lbl.setText("")
             self._phase_lbl.setText("")
@@ -1241,22 +1246,101 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────────────────────────────────
     # [OPT-1] Audio replay  ───────────────────────────────────────────────────
     # ─────────────────────────────────────────────────────────────────────────
+    @staticmethod
+    def _wav_duration(path: str) -> int:
+        """Return WAV file duration in whole seconds (0 on error)."""
+        try:
+            import wave as _wave
+            with _wave.open(path, "rb") as wf:
+                return max(1, round(wf.getnframes() / wf.getframerate()))
+        except Exception:
+            return 0
+
     def _on_replay_toggle(self):
-        """Toggle exam-page playback of the last recording."""
+        """
+        Exam-page recording playback.
+        • Freezes timer *display* (engine timer keeps running).
+        • Shows a modal countdown dialog: "录音回放中（N 秒）".
+        • Dialog auto-closes when playback finishes; display resumes.
+        """
+        # ── Stop ongoing playback ────────────────────────────────────────────
         if self._wav_player.is_playing():
             self._wav_player.stop()
+            # _replay_display_paused and button text reset by _cleanup below
+            return
+
+        if not self._last_wav_path or not os.path.isfile(self._last_wav_path):
+            return
+
+        duration = self._wav_duration(self._last_wav_path)
+
+        # ── Freeze display ───────────────────────────────────────────────────
+        self._replay_display_paused = True
+        self._replay_btn.setText("停止回放")
+
+        # ── Build countdown dialog ───────────────────────────────────────────
+        dlg = QDialog(self)
+        dlg.setWindowTitle("录音回放")
+        dlg.setWindowFlags(
+            Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint
+        )
+        dlg.setMinimumWidth(300)
+        dlg.setStyleSheet(f"QDialog {{ background:{_BG}; }}")
+        vb = QVBoxLayout(dlg)
+        vb.setContentsMargins(28, 22, 28, 18)
+        vb.setSpacing(14)
+
+        remaining = [duration]   # mutable for closures
+
+        count_lbl = QLabel(f"录音回放中（{remaining[0]} 秒）")
+        count_lbl.setStyleSheet(
+            f"font-size:16px; font-weight:bold; color:{_BLUE};"
+        )
+        count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vb.addWidget(count_lbl)
+
+        stop_btn = QPushButton("停止回放")
+        stop_btn.setStyleSheet(_BTN_SM)
+        vb.addWidget(stop_btn, 0, Qt.AlignmentFlag.AlignCenter)
+
+        # Countdown QTimer
+        tick_timer = QTimer(dlg)
+        tick_timer.setInterval(1000)
+
+        def _tick():
+            remaining[0] -= 1
+            if remaining[0] > 0:
+                count_lbl.setText(f"录音回放中（{remaining[0]} 秒）")
+            else:
+                tick_timer.stop()
+                count_lbl.setText("回放完成")
+
+        tick_timer.timeout.connect(_tick)
+
+        # ── Cleanup (always called, regardless of how dialog closes) ─────────
+        def _cleanup(_=None):
+            tick_timer.stop()
+            self._wav_player.stop()
+            self._replay_display_paused = False
             self._replay_btn.setText("回放录音")
-        else:
-            if not self._last_wav_path or not os.path.isfile(self._last_wav_path):
-                return
-            self._replay_btn.setText("停止回放")
-            self._wav_player.play(
-                self._last_wav_path,
-                on_done=lambda: (
-                    self._replay_btn.setText("回放录音")
-                    if self._replay_btn else None
-                ),
-            )
+
+        # on_done fires via QTimer.singleShot → runs inside dlg.exec() loop
+        def _on_playback_done():
+            tick_timer.stop()
+            count_lbl.setText("回放完成")
+            QTimer.singleShot(400, dlg.accept)
+
+        stop_btn.clicked.connect(dlg.reject)
+        dlg.finished.connect(_cleanup)
+
+        # ── Start playback then open dialog (exec starts inner event loop) ───
+        self._wav_player.play(self._last_wav_path, on_done=_on_playback_done)
+        if duration > 0:
+            tick_timer.start()
+        dlg.exec()
+        # Safety net (covers Esc / Alt-F4 close)
+        self._replay_display_paused = False
+        self._replay_btn.setText("回放录音")
 
     def _on_end_replay_toggle(self):
         """Toggle end-page playback of the last recording."""
