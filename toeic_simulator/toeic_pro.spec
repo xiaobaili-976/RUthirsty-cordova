@@ -41,6 +41,8 @@ a = Analysis(
         'marks_manager',
         'review_engine',
         'voice_scorer',
+        'scoring_engine_config',
+        'alt_scorers',
         # ── pyttsx3 TTS drivers (Windows SAPI5 is primary) ──
         'pyttsx3.drivers',
         'pyttsx3.drivers.sapi5',

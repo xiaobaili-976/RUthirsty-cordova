@@ -56,8 +56,12 @@ echo 【题库更新】
 echo   将新的 question_bank.xlsx 放入本目录，重启软件即生效。
 echo.
 echo 【语音评分】
-echo   需要讯飞开放平台 ISE 服务账号，联网使用。
-echo   首次点击评分按钮时程序会引导输入 API 密钥。
+echo   支持四种评分引擎，点击右上角齿轮 → 语音评分引擎 切换：
+echo     · 本地开源 (Whisper+SpeechScore) — 离线，无需账号（集成中）
+echo     · 讯飞 ISE         — 需讯飞开放平台账号，联网使用
+echo     · 腾讯云智聆       — 需腾讯云账号，联网使用（集成中）
+echo     · 驰声 Chivox      — 需驰声账号，联网使用（集成中）
+echo   首次点击"语音评分"按钮时，程序会引导填写 API 密钥。
 echo.
 echo 【语音转文字 (可选)】
 echo   1. 前往 https://alphacephei.com/vosk/models

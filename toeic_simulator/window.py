@@ -403,6 +403,9 @@ class MainWindow(QMainWindow):
         # [PRO] Voice scorer
         self._voice_scorer = None   # created on first use
 
+        # Engine-selection config (lazy — needs base_dir from self._engine)
+        self._scoring_cfg = None
+
         # [OPT-1] WAV player for recording playback
         self._wav_player = _WAVPlayer()
 
@@ -453,10 +456,60 @@ class MainWindow(QMainWindow):
         return self._ui_tts
 
     def _get_voice_scorer(self):
+        """Legacy alias — routes to _get_active_scorer() for backward compat."""
+        return self._get_active_scorer()
+
+    # ── Engine-selection helpers ───────────────────────────────────────────────
+    def _get_scoring_cfg(self):
+        """Lazily create and return the ScoringEngineConfig instance."""
+        if self._scoring_cfg is None:
+            from scoring_engine_config import ScoringEngineConfig
+            self._scoring_cfg = ScoringEngineConfig(self._engine._base_dir)
+        return self._scoring_cfg
+
+    def _get_active_scorer(self):
+        """
+        Return the scorer matching the currently selected engine.
+        Discards and re-creates the cached scorer when the engine has changed.
+        """
+        engine = self._get_scoring_cfg().engine
+
+        # Type-name map for staleness detection
+        _type_for_engine = {
+            "xunfei":  "VoiceScorer",
+            "tencent": "TencentScorer",
+            "chivox":  "ChivoxScorer",
+            "local":   "LocalScorer",
+        }
+        if (self._voice_scorer is not None
+                and type(self._voice_scorer).__name__
+                    != _type_for_engine.get(engine)):
+            self._voice_scorer = None   # engine changed → recreate
+
         if self._voice_scorer is None:
-            from voice_scorer import VoiceScorer
-            self._voice_scorer = VoiceScorer(self._engine._base_dir)
+            base = self._engine._base_dir
+            if engine == "xunfei":
+                from voice_scorer import VoiceScorer
+                self._voice_scorer = VoiceScorer(base)
+            elif engine == "tencent":
+                from alt_scorers import TencentScorer
+                self._voice_scorer = TencentScorer(base)
+            elif engine == "chivox":
+                from alt_scorers import ChivoxScorer
+                self._voice_scorer = ChivoxScorer(base)
+            else:  # "local"
+                from alt_scorers import LocalScorer
+                self._voice_scorer = LocalScorer(base)
+
         return self._voice_scorer
+
+    def _on_select_engine(self, engine_key: str):
+        """Handle engine selection from the settings menu."""
+        cfg = self._get_scoring_cfg()
+        if cfg.engine == engine_key:
+            return
+        cfg.save(engine_key)
+        self._voice_scorer = None   # force re-creation on next scoring call
 
     # ─────────────────────────────────────────────────────────────────────────
     # UI construction
@@ -2088,7 +2141,7 @@ class MainWindow(QMainWindow):
           • ANY scoring-related dialog closes → resume timer immediately
           • Zero exam-flow logic is touched
         """
-        scorer = self._get_voice_scorer()
+        scorer = self._get_active_scorer()
         scorer._load_config()   # refresh credentials from file
 
         # Scenario 4: no recording file
@@ -2101,7 +2154,7 @@ class MainWindow(QMainWindow):
         # Scenario 1: credentials not configured → show config dialog
         if not scorer.has_credentials():
             self._engine.pause_timer()
-            self._show_xunfei_config_dialog(scorer)
+            self._show_scorer_credentials_dialog(scorer)
             if not scorer.has_credentials():
                 # User closed without saving valid credentials
                 self._engine.resume_timer()
@@ -2210,13 +2263,47 @@ class MainWindow(QMainWindow):
         dlg.exec()
 
     def _show_xunfei_config_dialog(self, scorer):
+        """Legacy wrapper — kept for backward compat; delegates to generic dialog."""
+        self._show_api_config_dialog(
+            scorer,
+            title="讯飞 ISE 密钥配置",
+            hint=(
+                "请输入讯飞开放平台的 ISE 服务密钥。\n"
+                "语音评分功能需要联网，其余功能不受影响。"
+            ),
+        )
+
+    def _show_scorer_credentials_dialog(self, scorer) -> None:
         """
-        Show iFlytek ISE credentials config dialog.
+        Dispatch to the right credentials dialog for the currently selected engine.
         Timer must already be paused before calling.
-        Scenario 2: if user saves empty/partial values → warning + dialog closes.
+        """
+        engine = self._get_scoring_cfg().engine
+        _titles = {
+            "xunfei":  ("讯飞 ISE 密钥配置",
+                        "请输入讯飞开放平台的 ISE 服务密钥。\n"
+                        "语音评分功能需要联网，其余功能不受影响。"),
+            "tencent": ("腾讯云智聆 密钥配置",
+                        "请输入腾讯云智聆口语评测服务密钥。\n"
+                        "语音评分功能需要联网，其余功能不受影响。"),
+            "chivox":  ("驰声 Chivox 密钥配置",
+                        "请输入驰声 Chivox 语音评测服务密钥。\n"
+                        "语音评分功能需要联网，其余功能不受影响。"),
+        }
+        title, hint = _titles.get(
+            engine,
+            ("API 密钥配置", "请填写完整的 App ID、API Key 和 API Secret。"),
+        )
+        self._show_api_config_dialog(scorer, title, hint)
+
+    def _show_api_config_dialog(self, scorer, title: str, hint: str) -> None:
+        """
+        Generic API credentials dialog (App ID / API Key / API Secret).
+        Saves via scorer.save_config() on success.
+        Timer must already be paused before calling.
         """
         dlg = QDialog(self)
-        dlg.setWindowTitle("讯飞 ISE 密钥配置")
+        dlg.setWindowTitle(title)
         dlg.setMinimumWidth(420)
         dlg.setStyleSheet(f"""
             QDialog {{ background:{_BG}; }}
@@ -2230,13 +2317,10 @@ class MainWindow(QMainWindow):
         vb.setContentsMargins(20, 16, 20, 12)
         vb.setSpacing(12)
 
-        hint = QLabel(
-            "请输入讯飞开放平台的 ISE 服务密钥。\n"
-            "语音评分功能需要联网，其余功能不受影响。"
-        )
-        hint.setStyleSheet("font-size:12px; color:#666;")
-        hint.setWordWrap(True)
-        vb.addWidget(hint)
+        hint_lbl = QLabel(hint)
+        hint_lbl.setStyleSheet("font-size:12px; color:#666;")
+        hint_lbl.setWordWrap(True)
+        vb.addWidget(hint_lbl)
 
         form = QFormLayout()
         form.setSpacing(8)
@@ -2269,16 +2353,16 @@ class MainWindow(QMainWindow):
             ak  = api_key_edit.text().strip()
             ase = api_secret_edit.text().strip()
             if not (aid and ak and ase):
-                # Scenario 2: invalid/empty values
-                QMessageBox.warning(dlg, "密钥配置无效",
-                                    "请填写完整的 App ID、API Key 和 API Secret。")
-                dlg.reject()   # close config dialog → caller will resume timer
+                QMessageBox.warning(
+                    dlg, "密钥配置无效",
+                    "请填写完整的 App ID、API Key 和 API Secret。",
+                )
+                dlg.reject()
                 return
             scorer.save_config(aid, ak, ase)
             dlg.accept()
 
         bb.button(QDialogButtonBox.StandardButton.Save).clicked.connect(_on_save)
-
         dlg.exec()
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -2424,24 +2508,27 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────────────────────────────────
     def _apply_activation_ui(self):
         """
-        Show gear (settings) button pre-activation; show exit button post-activation.
-        Called once on init and again after successful activation / dev unlock.
+        Controls header gear / exit button visibility.
+        Called once on init and again after activation or dev unlock.
+
+        Rules:
+          • No license manager          → hide both (native × suffices)
+          • Permanently activated       → hide both (license file present)
+          • Developer mode              → keep gear (settings shows engine + exit only)
+          • Trial (active or expired)   → show gear (full settings menu)
         """
         if self._license is None:
-            # No license manager — hide both; native × is sufficient
             self._settings_btn.hide()
             self._exit_btn.hide()
             return
 
-        if self._license.is_unlocked() and (
-            self._license.is_dev_mode() or self._license._check_license_file()
-        ):
-            # Permanently activated or dev mode → hide both; use native window × to close
+        if self._license.is_unlocked() and self._license._check_license_file():
+            # Permanently activated → no settings menu needed
             self._settings_btn.hide()
             self._exit_btn.hide()
             self._trial_lbl.hide()
         else:
-            # Trial (active or expired) → gear settings button
+            # Dev mode OR trial (active/expired) → show gear settings button
             self._settings_btn.show()
             self._exit_btn.hide()
 
@@ -2536,10 +2623,14 @@ class MainWindow(QMainWindow):
 
     def _show_settings_dropdown(self):
         """
-        Gear button handler: show settings popup menu with trial info,
-        invite code activation, and exit.
+        Gear button handler — settings popup menu.
+
+        Trial mode:  试用时间 (disabled) | 输入邀请码 | ── | 语音评分引擎 ▶ | ── | 退出
+        Dev mode:    语音评分引擎 ▶ | ── | 退出      (no trial info / invite code)
         """
         from PyQt6.QtWidgets import QMenu
+
+        is_dev = bool(self._license and self._license.is_dev_mode())
 
         menu = QMenu(self)
         menu.setStyleSheet(f"""
@@ -2554,21 +2645,38 @@ class MainWindow(QMainWindow):
             QMenu::separator {{ height:1px; background:{_BORDER}; margin:4px 8px; }}
         """)
 
-        # Trial countdown (display-only, disabled)
-        secs = self._license.trial_remaining_seconds() if self._license else 0
-        h, r = divmod(secs, 3600)
-        m, s = divmod(r, 60)
-        if secs > 0:
-            trial_text = f"试用期剩余 {h:02d}:{m:02d}:{s:02d}"
-        else:
-            trial_text = "试用期已到期"
-        trial_action = menu.addAction(trial_text)
-        trial_action.setEnabled(False)
+        if not is_dev:
+            # Trial countdown (display-only, disabled)
+            secs = self._license.trial_remaining_seconds() if self._license else 0
+            h, r = divmod(secs, 3600)
+            m, s = divmod(r, 60)
+            trial_text = (
+                f"试用期剩余 {h:02d}:{m:02d}:{s:02d}" if secs > 0 else "试用期已到期"
+            )
+            trial_action = menu.addAction(trial_text)
+            trial_action.setEnabled(False)
 
-        menu.addSeparator()
+            menu.addSeparator()
 
-        activate_action = menu.addAction("输入邀请码")
-        activate_action.triggered.connect(self._show_activate_dialog)
+            activate_action = menu.addAction("输入邀请码")
+            activate_action.triggered.connect(self._show_activate_dialog)
+
+            menu.addSeparator()
+
+        # ── Voice scoring engine submenu ──────────────────────────────────────
+        from scoring_engine_config import ENGINES
+        current_engine = self._get_scoring_cfg().engine
+
+        engine_menu = menu.addMenu("语音评分引擎")
+        engine_menu.setStyleSheet(menu.styleSheet())
+
+        for key, label in ENGINES:
+            act = engine_menu.addAction(label)
+            act.setCheckable(True)
+            act.setChecked(key == current_engine)
+            act.triggered.connect(
+                lambda _checked=False, k=key: self._on_select_engine(k)
+            )
 
         menu.addSeparator()
 
