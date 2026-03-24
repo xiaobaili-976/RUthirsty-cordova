@@ -319,6 +319,18 @@ class ExamEngine(QObject):
         self.skip_available.emit(False)
         self.update_timer.emit(-1, "")
 
+    def pause_timer(self) -> None:
+        """Pause the active countdown without advancing (e.g. scoring dialog open)."""
+        if self._countdown.isActive():
+            self._countdown.stop()
+            self._timer_paused = True
+
+    def resume_timer(self) -> None:
+        """Resume a previously paused countdown timer."""
+        if getattr(self, '_timer_paused', False) and self._remaining > 0:
+            self._timer_paused = False
+            self._countdown.start()
+
     # ── private ───────────────────────────────────────────────────────────────
     def _load_bank(self) -> None:
         # ── 1. Try Excel (.xlsx) ──────────────────────────────────────────────

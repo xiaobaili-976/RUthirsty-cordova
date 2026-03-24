@@ -25,6 +25,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QSizePolicy, QListWidget, QListWidgetItem,
     QDialog, QTextEdit, QMessageBox,
     QInputDialog, QLineEdit, QFileDialog,
+    QDialogButtonBox, QFormLayout,
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QPoint, QSize, QTimer
 from PyQt6.QtGui import (
@@ -145,6 +146,57 @@ QPushButton {{
 """
 
 
+def _make_gear_qicon() -> QIcon:
+    """
+    Gear / settings icon (24×24 canvas, 2 px white pen):
+      • Outer circle — radius 9 centred at (12,12)
+      • Inner circle  — radius 5 (hole)
+      • 4 rectangular teeth at N / S / E / W
+    """
+    from PyQt6.QtCore import QRectF
+    pm = QPixmap(24, 24)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor("#FFFFFF"), 2.0, Qt.PenStyle.SolidLine,
+               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    # Outer ring
+    p.drawEllipse(QRectF(3, 3, 18, 18))
+    # Inner hole
+    p.drawEllipse(QRectF(8, 8, 8, 8))
+    # 4 teeth
+    p.drawLine(11, 0, 11, 3)
+    p.drawLine(13, 0, 13, 3)
+    p.drawLine(11, 21, 11, 24)
+    p.drawLine(13, 21, 13, 24)
+    p.drawLine(0, 11, 3, 11)
+    p.drawLine(0, 13, 3, 13)
+    p.drawLine(21, 11, 24, 11)
+    p.drawLine(21, 13, 24, 13)
+    p.end()
+    return QIcon(pm)
+
+
+def _make_exit_qicon() -> QIcon:
+    """
+    Exit / close icon (24×24 canvas, 2 px white pen):
+      • × shape: two diagonal lines
+    """
+    pm = QPixmap(24, 24)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor("#FFFFFF"), 2.0, Qt.PenStyle.SolidLine,
+               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.drawLine(5, 5, 19, 19)
+    p.drawLine(19, 5, 5, 19)
+    p.end()
+    return QIcon(pm)
+
+
 def _make_home_qicon() -> QIcon:
     """
     House icon (24×24 canvas, 2 px white pen):
@@ -225,6 +277,15 @@ class MainWindow(QMainWindow):
         # [PRO] Voice scorer
         self._voice_scorer = None   # created on first use
 
+        # Activation state flag (set to True once permanently activated)
+        self._activated = (
+            self._license is not None
+            and self._license._unlocked
+            and not self._license.is_dev_mode()
+            # dev mode keeps trial UI; permanent activation triggers cleanup
+            and self._license._check_license_file()
+        ) if self._license else False
+
         self.setWindowTitle("TOEIC Speaking Pro")   # [PRO-1]
         self.setMinimumSize(1024, 768)
         self.resize(1280, 820)
@@ -241,6 +302,10 @@ class MainWindow(QMainWindow):
         if self._license and not self._license.is_dev_mode():
             self._trial_timer.start()
         self._update_trial_label()
+        self._apply_activation_ui()   # set initial gear/exit state
+
+        # After event loop starts: show blocking dialog if trial expired
+        QTimer.singleShot(150, self._startup_check)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Lazy helpers
@@ -255,7 +320,7 @@ class MainWindow(QMainWindow):
     def _get_voice_scorer(self):
         if self._voice_scorer is None:
             from voice_scorer import VoiceScorer
-            self._voice_scorer = VoiceScorer()
+            self._voice_scorer = VoiceScorer(self._engine._base_dir)
         return self._voice_scorer
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -331,6 +396,27 @@ class MainWindow(QMainWindow):
         self._ans_btn.hide()
         lay.addWidget(self._ans_btn)
 
+        lay.addSpacing(8)
+
+        # Settings button — gear icon (pre-activation)
+        self._settings_btn = QPushButton()
+        self._settings_btn.setIcon(_make_gear_qicon())
+        self._settings_btn.setIconSize(_ICON_SZ)
+        self._settings_btn.setStyleSheet(_HDR_BTN)
+        self._settings_btn.setToolTip("设置")
+        self._settings_btn.clicked.connect(self._show_settings_dropdown)
+        lay.addWidget(self._settings_btn)
+
+        # Exit button — × icon (post-activation, replaces gear)
+        self._exit_btn = QPushButton()
+        self._exit_btn.setIcon(_make_exit_qicon())
+        self._exit_btn.setIconSize(_ICON_SZ)
+        self._exit_btn.setStyleSheet(_HDR_BTN)
+        self._exit_btn.setToolTip("退出程序")
+        self._exit_btn.clicked.connect(self.close)
+        self._exit_btn.hide()
+        lay.addWidget(self._exit_btn)
+
         lay.addSpacing(12)
         return hdr
 
@@ -370,63 +456,23 @@ class MainWindow(QMainWindow):
 
         lay.addSpacing(24)
 
-        # Original button row — fully preserved
+        # Two core action buttons only
         btn_row = QHBoxLayout()
-        btn_row.setSpacing(20)
+        btn_row.setSpacing(24)
+        btn_row.addStretch()
 
-        self._confirm_btn = QPushButton("确认选择  /  Start Exam")
+        self._confirm_btn = QPushButton("Start Exam  /  开始考试")
         self._confirm_btn.setStyleSheet(_BTN)
         self._confirm_btn.clicked.connect(self._on_confirm_set)
         btn_row.addWidget(self._confirm_btn)
 
-        quit_btn = QPushButton("退出程序")
-        quit_btn.setStyleSheet(_BTN_SM)
-        quit_btn.clicked.connect(self.close)
-        btn_row.addWidget(quit_btn)
-
-        update_btn = QPushButton("更新题库")
-        update_btn.setStyleSheet(_BTN_SM)
-        update_btn.setToolTip("选择新的 Excel / CSV 题库文件覆盖本地题库，更新后重启生效")
-        update_btn.clicked.connect(self._on_update_bank)
-        btn_row.addWidget(update_btn)
-
-        btn_row.insertStretch(0)
-        btn_row.addStretch()
-        lay.addLayout(btn_row)
-
-        # ── [PRO-2] Mode entry buttons ─────────────────────────────────────
-        lay.addSpacing(24)
-
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color:{_BORDER};")
-        lay.addWidget(sep)
-
-        lay.addSpacing(10)
-
-        mode_hint = QLabel("选择练习模式  /  Choose Practice Mode")
-        mode_hint.setStyleSheet("font-size:14px; color:#888;")
-        mode_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.addWidget(mode_hint)
-
-        lay.addSpacing(10)
-
-        mode_row = QHBoxLayout()
-        mode_row.setSpacing(24)
-        mode_row.addStretch()
-
-        exam_mode_btn = QPushButton("考试模拟模式")
-        exam_mode_btn.setStyleSheet(_BTN)
-        exam_mode_btn.clicked.connect(self._on_confirm_set)
-        mode_row.addWidget(exam_mode_btn)
-
         review_mode_btn = QPushButton("背诵复习模式")
         review_mode_btn.setStyleSheet(_BTN)
         review_mode_btn.clicked.connect(self._on_enter_review)
-        mode_row.addWidget(review_mode_btn)
+        btn_row.addWidget(review_mode_btn)
 
-        mode_row.addStretch()
-        lay.addLayout(mode_row)
+        btn_row.addStretch()
+        lay.addLayout(btn_row)
 
         return page
 
@@ -1372,37 +1418,95 @@ class MainWindow(QMainWindow):
     # Voice scoring  [PRO-3 / PRO-5]
     # ─────────────────────────────────────────────────────────────────────────
     def _on_voice_score(self, wav_path: str, answer_text: str):
-        """Trigger async voice scoring and show result dialog."""
-        if not wav_path:
-            QMessageBox.information(self, "提示", "录音文件不存在，请先完成录音。")
+        """
+        Entry point for voice scoring (exam page or review page).
+
+        Timer pause/resume rules (highest priority):
+          • ANY scoring-related dialog opens  → pause timer immediately
+          • ANY scoring-related dialog closes → resume timer immediately
+          • Zero exam-flow logic is touched
+        """
+        scorer = self._get_voice_scorer()
+        scorer._load_config()   # refresh credentials from file
+
+        # Scenario 4: no recording file
+        if not wav_path or not os.path.isfile(wav_path):
+            self._engine.pause_timer()
+            QMessageBox.information(self, "提示", "无有效录音，请重新录音。")
+            self._engine.resume_timer()
             return
 
-        scorer = self._get_voice_scorer()
+        # Scenario 1: credentials not configured → show config dialog
+        if not scorer.has_credentials():
+            self._engine.pause_timer()
+            self._show_xunfei_config_dialog(scorer)
+            if not scorer.has_credentials():
+                # User closed without saving valid credentials
+                self._engine.resume_timer()
+                return
+            # Valid credentials saved; timer still paused → proceed to score
 
-        # Disable button while scoring
-        sender_btn = self.sender()
-        if sender_btn:
-            sender_btn.setEnabled(False)
-            sender_btn.setText("评分中…")
+        else:
+            # Have credentials; pause before launching request
+            self._engine.pause_timer()
+
+        btn = self.sender()
+        self._do_voice_score(wav_path, answer_text, scorer, btn)
+
+    def _do_voice_score(self, wav_path: str, answer_text: str, scorer, btn):
+        """
+        Launch async scoring. Timer must already be paused before calling.
+        Handles all remaining scenarios (2, 3, 5, 6, 7) inside the callback.
+        """
+        if btn:
+            btn.setEnabled(False)
+            btn.setText("评分中…")
 
         def _callback(result, error):
-            # Restore button on main thread
-            QTimer.singleShot(0, lambda: self._on_score_result(
-                result, error, sender_btn
-            ))
+            QTimer.singleShot(0, lambda: _on_main(result, error))
+
+        def _on_main(result, error):
+            if btn:
+                btn.setEnabled(True)
+                btn.setText("语音评分")
+
+            # Scenario 5: 5-second timeout → retry dialog
+            if error == "__TIMEOUT__":
+                reply = QMessageBox.question(
+                    self,
+                    "评分超时",
+                    "评分超时，是否重试？",
+                    QMessageBox.StandardButton.Retry | QMessageBox.StandardButton.Close,
+                    QMessageBox.StandardButton.Retry,
+                )
+                if reply == QMessageBox.StandardButton.Retry:
+                    self._do_voice_score(wav_path, answer_text, scorer, btn)
+                else:
+                    self._engine.resume_timer()
+                return
+
+            if error:
+                # Scenario 3: network error
+                if "网络" in error or "OSError" in error.lower():
+                    msg = "请检查网络连接，语音评分需联网使用。"
+                # Scenario 2: invalid/unconfigured credentials
+                elif "未配置" in error:
+                    msg = error
+                # Scenario 6: other API failure
+                else:
+                    msg = "评分失败，请重试。"
+                QMessageBox.warning(self, "语音评分", msg)
+                self._engine.resume_timer()
+                return
+
+            # Scenario 7: success → result dialog (timer stays paused during dialog)
+            self._show_score_result_dialog(result)
+            self._engine.resume_timer()
 
         scorer.score_async(wav_path, answer_text, _callback)
 
-    def _on_score_result(self, result, error, btn):
-        """Show scoring result dialog (called on main thread)."""
-        if btn:
-            btn.setEnabled(True)
-            btn.setText("语音评分")
-
-        if error:
-            QMessageBox.warning(self, "语音评分", error)
-            return
-
+    def _show_score_result_dialog(self, result: dict):
+        """Show scoring result dialog (timer must already be paused)."""
         dlg = QDialog(self)
         dlg.setWindowTitle("语音评分结果")
         dlg.setMinimumWidth(360)
@@ -1440,6 +1544,78 @@ class MainWindow(QMainWindow):
         close.setStyleSheet(_BTN_SM)
         close.clicked.connect(dlg.accept)
         vb.addWidget(close, 0, Qt.AlignmentFlag.AlignRight)
+
+        dlg.exec()
+
+    def _show_xunfei_config_dialog(self, scorer):
+        """
+        Show iFlytek ISE credentials config dialog.
+        Timer must already be paused before calling.
+        Scenario 2: if user saves empty/partial values → warning + dialog closes.
+        """
+        dlg = QDialog(self)
+        dlg.setWindowTitle("讯飞 ISE 密钥配置")
+        dlg.setMinimumWidth(420)
+        dlg.setStyleSheet(f"""
+            QDialog {{ background:{_BG}; }}
+            QLabel  {{ font-size:13px; color:#333; }}
+            QLineEdit {{
+                font-size:13px; padding:4px 8px;
+                border:1px solid {_BORDER}; border-radius:4px;
+            }}
+        """)
+        vb = QVBoxLayout(dlg)
+        vb.setContentsMargins(20, 16, 20, 12)
+        vb.setSpacing(12)
+
+        hint = QLabel(
+            "请输入讯飞开放平台的 ISE 服务密钥。\n"
+            "语音评分功能需要联网，其余功能不受影响。"
+        )
+        hint.setStyleSheet("font-size:12px; color:#666;")
+        hint.setWordWrap(True)
+        vb.addWidget(hint)
+
+        form = QFormLayout()
+        form.setSpacing(8)
+
+        app_id_edit = QLineEdit(scorer.app_id)
+        app_id_edit.setPlaceholderText("App ID")
+        form.addRow("App ID:", app_id_edit)
+
+        api_key_edit = QLineEdit(scorer.api_key)
+        api_key_edit.setPlaceholderText("API Key")
+        form.addRow("API Key:", api_key_edit)
+
+        api_secret_edit = QLineEdit(scorer.api_secret)
+        api_secret_edit.setPlaceholderText("API Secret")
+        api_secret_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        form.addRow("API Secret:", api_secret_edit)
+
+        vb.addLayout(form)
+
+        bb = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel
+        )
+        bb.button(QDialogButtonBox.StandardButton.Save).setText("保存")
+        bb.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
+        bb.rejected.connect(dlg.reject)
+        vb.addWidget(bb)
+
+        def _on_save():
+            aid = app_id_edit.text().strip()
+            ak  = api_key_edit.text().strip()
+            ase = api_secret_edit.text().strip()
+            if not (aid and ak and ase):
+                # Scenario 2: invalid/empty values
+                QMessageBox.warning(dlg, "密钥配置无效",
+                                    "请填写完整的 App ID、API Key 和 API Secret。")
+                dlg.reject()   # close config dialog → caller will resume timer
+                return
+            scorer.save_config(aid, ak, ase)
+            dlg.accept()
+
+        bb.button(QDialogButtonBox.StandardButton.Save).clicked.connect(_on_save)
 
         dlg.exec()
 
@@ -1576,6 +1752,193 @@ class MainWindow(QMainWindow):
         if ok and self._license.unlock_dev(pwd):
             self._trial_timer.stop()
             self._update_trial_label()
+            self._apply_activation_ui()
             QMessageBox.information(self, "成功", "开发者模式已启用。")
         elif ok:
             QMessageBox.warning(self, "错误", "口令不正确。")
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Activation / settings UI helpers
+    # ─────────────────────────────────────────────────────────────────────────
+    def _apply_activation_ui(self):
+        """
+        Show gear (settings) button pre-activation; show exit button post-activation.
+        Called once on init and again after successful activation / dev unlock.
+        """
+        if self._license is None:
+            # No license manager — show exit button only
+            self._settings_btn.hide()
+            self._exit_btn.show()
+            return
+
+        if self._license.is_unlocked() and (
+            self._license.is_dev_mode() or self._license._check_license_file()
+        ):
+            # Permanently activated or dev mode → exit button only
+            self._settings_btn.hide()
+            self._exit_btn.show()
+            self._trial_lbl.hide()
+        else:
+            # Trial (active or expired) → gear settings button
+            self._settings_btn.show()
+            self._exit_btn.hide()
+
+    def _startup_check(self):
+        """
+        Called ~150 ms after window is shown.
+        If trial has expired and software is not activated, show blocking dialog.
+        """
+        if self._license is None:
+            return
+        if self._license.is_unlocked():
+            return
+        if self._license.trial_remaining_seconds() <= 0:
+            self._show_expired_dialog()
+
+    def _show_expired_dialog(self):
+        """
+        Blocking activation-only dialog shown when trial is expired.
+        Only two actions available: enter invite code OR exit.
+        Closing the dialog (Alt+F4 etc.) also exits the app.
+        """
+        dlg = QDialog(self)
+        dlg.setWindowTitle("试用期已到期")
+        # Remove close button — only our buttons can dismiss
+        dlg.setWindowFlags(
+            Qt.WindowType.Dialog
+            | Qt.WindowType.CustomizeWindowHint
+            | Qt.WindowType.WindowTitleHint
+        )
+        dlg.setMinimumWidth(420)
+        dlg.setStyleSheet(f"""
+            QDialog {{ background:{_BG}; }}
+            QLabel  {{ font-size:14px; color:#333; }}
+        """)
+        vb = QVBoxLayout(dlg)
+        vb.setContentsMargins(32, 28, 32, 24)
+        vb.setSpacing(14)
+
+        icon_lbl = QLabel("⏰")
+        icon_lbl.setStyleSheet("font-size:40px;")
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vb.addWidget(icon_lbl)
+
+        title = QLabel("软件试用期已结束")
+        title.setStyleSheet(f"font-size:18px; font-weight:bold; color:{_BLUE};")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vb.addWidget(title)
+
+        msg = QLabel(
+            "请输入邀请码以激活正版，\n"
+            "或退出程序。"
+        )
+        msg.setStyleSheet("font-size:14px; color:#555;")
+        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vb.addWidget(msg)
+
+        vb.addSpacing(8)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(16)
+        btn_row.addStretch()
+
+        activate_btn = QPushButton("输入邀请码")
+        activate_btn.setStyleSheet(_BTN_SM)
+        btn_row.addWidget(activate_btn)
+
+        quit_btn = QPushButton("退出程序")
+        quit_btn.setStyleSheet(_BTN_SM)
+        btn_row.addWidget(quit_btn)
+
+        btn_row.addStretch()
+        vb.addLayout(btn_row)
+
+        def _on_activate():
+            code, ok = QInputDialog.getText(
+                dlg, "激活软件", "请输入邀请码（格式 BASE-XXXXXXNNN）：",
+            )
+            if ok and code.strip():
+                success, msg_txt = self._license.activate(code)
+                if success:
+                    dlg.accept()
+                    self._on_activation_success()
+                else:
+                    QMessageBox.warning(dlg, "激活失败", msg_txt)
+
+        activate_btn.clicked.connect(_on_activate)
+        quit_btn.clicked.connect(self.close)
+        # Any dialog rejection (Esc, etc.) also exits
+        dlg.rejected.connect(self.close)
+
+        dlg.exec()
+
+    def _show_settings_dropdown(self):
+        """
+        Gear button handler: show settings popup menu with trial info,
+        invite code activation, and exit.
+        """
+        from PyQt6.QtWidgets import QMenu
+
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background:#FFFFFF; border:1px solid {_BORDER};
+                border-radius:6px; padding:4px 0;
+                font-size:13px;
+            }}
+            QMenu::item {{ padding:7px 20px; color:#333; }}
+            QMenu::item:selected {{ background:{_HI}; color:{_BLUE}; }}
+            QMenu::item:disabled {{ color:#AAA; }}
+            QMenu::separator {{ height:1px; background:{_BORDER}; margin:4px 8px; }}
+        """)
+
+        # Trial countdown (display-only, disabled)
+        secs = self._license.trial_remaining_seconds() if self._license else 0
+        h, r = divmod(secs, 3600)
+        m, s = divmod(r, 60)
+        if secs > 0:
+            trial_text = f"试用期剩余 {h:02d}:{m:02d}:{s:02d}"
+        else:
+            trial_text = "试用期已到期"
+        trial_action = menu.addAction(trial_text)
+        trial_action.setEnabled(False)
+
+        menu.addSeparator()
+
+        activate_action = menu.addAction("输入邀请码")
+        activate_action.triggered.connect(self._show_activate_dialog)
+
+        menu.addSeparator()
+
+        exit_action = menu.addAction("退出程序")
+        exit_action.triggered.connect(self.close)
+
+        # Show just below the settings button
+        pos = self._settings_btn.mapToGlobal(
+            self._settings_btn.rect().bottomLeft()
+        )
+        menu.exec(pos)
+
+    def _show_activate_dialog(self):
+        """Invite-code input dialog (from settings dropdown)."""
+        if self._license is None:
+            return
+        code, ok = QInputDialog.getText(
+            self, "激活软件", "请输入邀请码（格式 BASE-XXXXXXNNN）：",
+        )
+        if ok and code.strip():
+            success, msg_txt = self._license.activate(code)
+            if success:
+                self._on_activation_success()
+            else:
+                QMessageBox.warning(self, "激活失败", msg_txt)
+
+    def _on_activation_success(self):
+        """Called after successful activation — update UI to activated state."""
+        self._trial_timer.stop()
+        self._update_trial_label()
+        self._apply_activation_ui()
+        QMessageBox.information(
+            self, "激活成功",
+            "软件已永久激活！\n感谢您的支持。"
+        )

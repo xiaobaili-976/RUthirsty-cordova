@@ -1,31 +1,23 @@
 @echo off
 setlocal
 echo ============================================================
-echo  TOEIC Speaking Test Simulator v2 — Build Script
+echo  TOEIC Speaking Pro — Build Script
+echo  Output: dist\TOEIC_Speaking_Pro.exe  (single file)
 echo ============================================================
 echo.
 
+cd /d "%~dp0"
+
 echo [1/4] Installing Python dependencies...
-pip install --upgrade PyQt6 pyttsx3 pyaudio vosk pyinstaller
+pip install -r requirements.txt
 if errorlevel 1 (
     echo ERROR: pip install failed. Make sure Python 3.9+ is on PATH.
     pause & exit /b 1
 )
 
 echo.
-echo [2/4] Building EXE with PyInstaller...
-pyinstaller ^
-    --onefile ^
-    --windowed ^
-    --name "TOEIC_Speaking_Simulator" ^
-    --hidden-import "pyttsx3.drivers" ^
-    --hidden-import "pyttsx3.drivers.sapi5" ^
-    --hidden-import "pyttsx3.drivers.nsss" ^
-    --hidden-import "pyttsx3.drivers.espeak" ^
-    --hidden-import "vosk" ^
-    --collect-all PyQt6 ^
-    main.py
-
+echo [2/4] Building EXE with PyInstaller (using toeic_pro.spec)...
+pyinstaller toeic_pro.spec --clean --noconfirm
 if errorlevel 1 (
     echo ERROR: PyInstaller build failed.
     pause & exit /b 1
@@ -33,53 +25,60 @@ if errorlevel 1 (
 
 echo.
 echo [3/4] Preparing runtime distribution folder...
-if not exist "dist\images\set1" mkdir "dist\images\set1"
-if not exist "dist\images\set2" mkdir "dist\images\set2"
-if not exist "dist\records"     mkdir "dist\records"
-if not exist "dist\model"       mkdir "dist\model"
-copy /Y "question_bank.json" "dist\" >nul 2>&1
+if not exist "dist\images"  mkdir "dist\images"
+if not exist "dist\records" mkdir "dist\records"
+if not exist "dist\model"   mkdir "dist\model"
+
+:: Copy question bank files if they exist
+for %%f in (question_bank.xlsx question_bank.json questions.json) do (
+    if exist "%%f" copy /Y "%%f" "dist\" >nul
+)
+
+:: Copy images folder if present
+if exist "images" (
+    xcopy /E /I /Y "images" "dist\images" >nul
+)
 
 echo.
-echo [4/4] Writing usage notes...
+echo [4/4] Writing README...
 (
-echo TOEIC Speaking Test Simulator v2 — 使用说明
-echo ==============================================
+echo TOEIC Speaking Pro — 使用说明
+echo ================================
 echo.
-echo 【基本使用】
-echo 1. 编辑 question_bank.json，按格式填入各套题目与参考答案。
-echo 2. 将 PART 2 图片分别放入 images\set1\, images\set2\ 等子文件夹，
-echo    路径须与 question_bank.json 中一致（如 images/set1/q3.jpg）。
-echo 3. 双击 TOEIC_Speaking_Simulator.exe 启动程序。
-echo 4. 在套题选择界面选择套题，点击"确认选择"开始考试。
-echo 5. 考试全程可点击"跳过"按钮跳过当前倒计时，
-echo    点击标题栏"?"按钮查看当前题目参考答案。
+echo 【启动方式】
+echo   双击 TOEIC_Speaking_Pro.exe 即可运行，无需安装 Python。
 echo.
-echo 【录音与语音转文字】
-echo - 程序检测到麦克风后，作答阶段自动开始录音（标题栏显示 ● REC）。
-echo - 录音文件保存至 records\set_{编号}\ 文件夹。
-echo - 如需启用语音转文字功能：
-echo     a. 前往 https://alphacephei.com/vosk/models
-echo     b. 下载英文小模型（推荐 vosk-model-small-en-us-0.15，约 40MB）
-echo     c. 解压后将模型文件夹改名为 model，放在本程序目录下
-echo     d. 重新运行程序，转写文本将与录音文件一同保存。
+echo 【首次启动】
+echo   - 软件附带 3 天免费试用期，到期后需输入邀请码激活。
+echo   - 点击右上角齿轮图标可查看剩余试用时间或输入邀请码。
+echo.
+echo 【题库更新】
+echo   将新的 question_bank.xlsx 放入本目录，重启软件即生效。
+echo.
+echo 【语音评分】
+echo   需要讯飞开放平台 ISE 服务账号，联网使用。
+echo   首次点击评分按钮时程序会引导输入 API 密钥。
+echo.
+echo 【语音转文字 (可选)】
+echo   1. 前往 https://alphacephei.com/vosk/models
+echo   2. 下载英文小模型（vosk-model-small-en-us-0.15，约 40MB）
+echo   3. 解压后将文件夹改名为 model，放入本目录
+echo   4. 重启软件即可启用转写功能。
+echo.
+echo 【目录结构】
+echo   TOEIC_Speaking_Pro.exe   主程序
+echo   question_bank.xlsx       题库（可替换）
+echo   images\                  PART2 题目图片
+echo   records\                 练习录音（自动生成）
+echo   model\                   vosk 语音模型（可选）
 echo.
 echo 【系统要求】
-echo - Windows 10 / 11（64位），无需安装 Python
-echo - 麦克风（可选，不连接时考试流程正常运行）
+echo   Windows 10 / 11 (64 位)，无需安装任何运行库。
 ) > "dist\README.txt"
 
 echo.
 echo ============================================================
 echo  Build complete!
-echo  EXE: dist\TOEIC_Speaking_Simulator.exe
-echo.
-echo  目录结构说明:
-echo    dist\TOEIC_Speaking_Simulator.exe  主程序
-echo    dist\question_bank.json            题目配置（可编辑）
-echo    dist\images\set1\                  套题1的 PART2 图片
-echo    dist\images\set2\                  套题2的 PART2 图片
-echo    dist\model\                        vosk 语音模型（下载后放此处）
-echo    dist\records\                      练习录音（自动生成）
+echo  EXE: dist\TOEIC_Speaking_Pro.exe
 echo ============================================================
 pause
-

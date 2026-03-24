@@ -1,4 +1,4 @@
-name: Build TOEIC Simulator EXE
+name: Build TOEIC Speaking Pro EXE
 
 on:
   push:
@@ -25,98 +25,125 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: toeic_simulator/requirements.txt
 
       - name: Install dependencies
         working-directory: toeic_simulator
         run: |
           python -m pip install --upgrade pip
-          pip install PyQt6 pyttsx3 pyaudio vosk openpyxl websocket-client pyinstaller
+          pip install -r requirements.txt
 
-      - name: Build with PyInstaller (spec)
+      - name: Build with PyInstaller
         working-directory: toeic_simulator
         shell: pwsh
-        run: pyinstaller toeic_pro.spec
+        run: pyinstaller toeic_pro.spec --clean --noconfirm
 
-      - name: Generate question_bank.xlsx from JSON
+      - name: Generate question_bank.xlsx from JSON (if needed)
         working-directory: toeic_simulator
         shell: pwsh
-        run: python make_question_bank_xlsx.py
+        run: |
+          if (-not (Test-Path question_bank.xlsx)) {
+            python make_question_bank_xlsx.py
+          }
 
       - name: Package release folder
         working-directory: toeic_simulator
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path release\images\set1 -Force | Out-Null
-          New-Item -ItemType Directory -Path release\images\set2 -Force | Out-Null
-          New-Item -ItemType Directory -Path release\records      -Force | Out-Null
-          New-Item -ItemType Directory -Path release\model        -Force | Out-Null
+          $v = "v1.0.${{ github.run_number }}"
+
+          New-Item -ItemType Directory -Path release\images  -Force | Out-Null
+          New-Item -ItemType Directory -Path release\records -Force | Out-Null
+          New-Item -ItemType Directory -Path release\model   -Force | Out-Null
 
           Copy-Item dist\TOEIC_Speaking_Pro.exe release\
-          Copy-Item question_bank.xlsx               release\
-          if (Test-Path images) { Copy-Item images release\images -Recurse -Force }
 
-          $v = "v1.0.${{ github.run_number }}"
+          # Copy question bank (prefer xlsx, fallback to json)
+          if (Test-Path question_bank.xlsx) {
+            Copy-Item question_bank.xlsx release\
+          } elseif (Test-Path question_bank.json) {
+            Copy-Item question_bank.json release\
+          }
+
+          # Copy images if present
+          if (Test-Path images) {
+            Copy-Item images release\images -Recurse -Force
+          }
+
+          # Write README
           $readme = @"
-          TOEIC Speaking Test Simulator $v
-          =====================================================
+TOEIC Speaking Pro $v
+==============================================
 
-          [使用方法]
-          1. 用 Excel 编辑 question_bank.xlsx 填写题目与参考答案。
-             Sheet 结构：Sets | Part1 | Part2 | Part3 | Part4 | Part5
-          2. Part 2 图片放入 images\set1\、images\set2\ 等子文件夹，
-             路径须与 xlsx 中一致。
-          3. 双击 TOEIC_Speaking_Pro.exe 启动程序。
-          4. 首次启动进入 3 天试用期，标题栏实时倒计时。
-          5. 试用到期后程序提示联系开发者获取授权。
+【启动方式】
+  双击 TOEIC_Speaking_Pro.exe，无需安装 Python。
 
-          [开发者模式]
-          - 方法一：按 Ctrl+Shift+T 输入开发口令，跳过试用限制。
-          - 方法二：将 dev_mode.txt 文件放在 EXE 同目录，重启生效。
+【首次使用】
+  软件附带 3 天免费试用期。
+  点击右上角齿轮图标可查看剩余时间或输入邀请码激活正版。
+  试用到期后弹出激活窗口，输入邀请码或退出程序。
 
-          [录音 / 语音转文字（可选）]
-          - 连接麦克风后，作答阶段自动录音（标题栏显示 ● REC）。
-          - 录音保存至 records\set_{id}\ 目录。
-          - 启用语音转文字：
-              a. 前往 https://alphacephei.com/vosk/models
-              b. 下载 vosk-model-small-en-us（约 40 MB）
-              c. 解压后重命名为 model，放在 EXE 同目录
+【题库更新】
+  用 Excel 编辑 question_bank.xlsx，保存后重启生效。
+  Sheet 结构：Sets | Part1 | Part2 | Part3 | Part4 | Part5
 
-          [系统要求]
-          Windows 10 / 11 64 位，无需安装 Python。
-          "@
+【Part 2 图片】
+  将图片放入 images\set1\、images\set2\ 等子文件夹，
+  路径须与 xlsx 中一致（如 images/set1/q3.jpg）。
+
+【语音评分】
+  需要讯飞开放平台 ISE 服务账号（联网使用）。
+  首次点击评分按钮时程序引导输入 API 密钥。
+  评分期间考试计时自动暂停，关闭结果窗口后恢复。
+
+【语音转文字（可选）】
+  1. 前往 https://alphacephei.com/vosk/models
+  2. 下载 vosk-model-small-en-us（约 40 MB）
+  3. 解压后重命名为 model，放在 EXE 同目录，重启生效。
+
+【开发者模式】
+  方法一：Ctrl+Shift+T 输入开发口令
+  方法二：将 dev_mode.txt 放在 EXE 同目录，重启生效
+
+【系统要求】
+  Windows 10 / 11（64 位），无需安装任何依赖。
+"@
           Set-Content -Path release\README.txt -Value $readme -Encoding utf8
 
+          # Pack zip
           Compress-Archive -Path release\* `
-            -DestinationPath TOEIC_Simulator_Windows_$v.zip
+            -DestinationPath TOEIC_Speaking_Pro_Windows_$v.zip
 
-      - name: Upload artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TOEIC_Simulator_Windows_v1.0.${{ github.run_number }}
-          path: toeic_simulator/TOEIC_Simulator_Windows_v1.0.${{ github.run_number }}.zip
+          name: TOEIC_Speaking_Pro_Windows_v1.0.${{ github.run_number }}
+          path: toeic_simulator/TOEIC_Speaking_Pro_Windows_v1.0.${{ github.run_number }}.zip
           retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v1.0.${{ github.run_number }}"
-          name: "TOEIC Speaking Simulator v1.0.${{ github.run_number }}"
+          name: "TOEIC Speaking Pro v1.0.${{ github.run_number }}"
           body: |
-            ## 托业口语考试模拟器 v1.0.${{ github.run_number }} — Windows EXE
+            ## TOEIC Speaking Pro v1.0.${{ github.run_number }} — Windows 单文件 EXE
 
-            ### 功能概览
-            - 完整 TOEIC Speaking 考试流程（Part 1–5，含计时、跳过、录音）
-            - 参考答案弹窗（📖 按钮）
-            - 3 天全功能试用期，标题栏实时倒计时
-            - 开发者模式：Ctrl+Shift+T 输入口令，或放置 `dev_mode.txt` 跳过限制
-            - 题库支持 Excel（question_bank.xlsx）/ JSON / CSV 三种格式
-            - 可选语音录音 + Vosk 语音转文字
+            ### 功能亮点
+            - 完整 TOEIC Speaking 考试流程（Part 1–5，计时 / 跳过 / 录音）
+            - 参考答案弹窗（📖 按钮）+ 离线朗读答案（TTS）
+            - 背诵复习模式：随机练习 / 答案速背 / 高频题专练 / 薄弱题巩固
+            - 标记高频 ★ / 薄弱题 ● 并本地存储
+            - 语音评分（讯飞 ISE API，联网，评分期间自动暂停计时）
+            - 3 天试用期 → 邀请码激活正版，右上角齿轮 / × 图标切换
+            - 题库支持 Excel / JSON / CSV，运行时热替换
 
             ### 下载使用
-            下载 `TOEIC_Simulator_Windows_v1.0.${{ github.run_number }}.zip`，解压后参见 README.txt
+            下载 `TOEIC_Speaking_Pro_Windows_v1.0.${{ github.run_number }}.zip`，
+            解压后双击 `TOEIC_Speaking_Pro.exe`，详见 README.txt。
 
             ### 系统要求
             Windows 10 / 11（64 位），无需安装 Python
-          files: toeic_simulator/TOEIC_Simulator_Windows_v1.0.${{ github.run_number }}.zip
+          files: toeic_simulator/TOEIC_Speaking_Pro_Windows_v1.0.${{ github.run_number }}.zip
           draft: false
           prerelease: false

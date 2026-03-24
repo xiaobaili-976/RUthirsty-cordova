@@ -1,13 +1,14 @@
 """
 Voice Scorer — iFlytek ISE (Intelligent Speaking Evaluation) API client.
 
-Credentials are read from environment variables:
-  XUNFEI_APP_ID     — App ID from iFlytek open platform
-  XUNFEI_API_KEY    — API key
-  XUNFEI_API_SECRET — API secret
+Credentials are read in priority order:
+  1. Environment variables: XUNFEI_APP_ID, XUNFEI_API_KEY, XUNFEI_API_SECRET
+  2. Local config file:     xunfei_config.json  (saved via save_config())
 
 All scoring is fully manual (user clicks button); never auto-starts or runs
 in the background without explicit user action.
+
+Timeout: 5 seconds. Caller receives error="__TIMEOUT__" to show retry dialog.
 
 Requires: websocket-client  (pip install websocket-client)
 """
@@ -23,16 +24,22 @@ from urllib.parse import urlencode
 from wsgiref.handlers import format_date_time
 
 
+class _Timeout(Exception):
+    """Raised internally when the 5-second scoring timeout elapses."""
+
+
 class VoiceScorer:
     """
     Asynchronously scores a WAV recording via the iFlytek ISE WebSocket API.
 
     Usage:
-        scorer = VoiceScorer()
+        scorer = VoiceScorer(base_dir)
         scorer.score_async(wav_path, reference_text, my_callback)
 
         def my_callback(result: dict | None, error: str | None):
-            if error:
+            if error == "__TIMEOUT__":
+                ask_retry()
+            elif error:
                 show_error(error)
             else:
                 show_scores(result)  # keys: pronunciation, fluency, completeness, overall
@@ -42,27 +49,73 @@ class VoiceScorer:
     _HOST    = "ise-api.xfyun.cn"
     _PATH    = "/v2/open-ise"
 
-    def __init__(self):
+    def __init__(self, base_dir: str = ""):
+        self._base_dir   = base_dir
+        self.app_id      = ""
+        self.api_key     = ""
+        self.api_secret  = ""
+        self._load_config()
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def has_credentials(self) -> bool:
+        """True when all three credentials are non-empty."""
+        return bool(self.app_id and self.api_key and self.api_secret)
+
+    def _config_path(self) -> str:
+        return os.path.join(self._base_dir, "xunfei_config.json")
+
+    def _load_config(self) -> None:
+        """Load credentials: env vars take priority over config file."""
         self.app_id     = os.environ.get("XUNFEI_APP_ID",     "")
         self.api_key    = os.environ.get("XUNFEI_API_KEY",    "")
         self.api_secret = os.environ.get("XUNFEI_API_SECRET", "")
+        if not (self.app_id and self.api_key and self.api_secret):
+            try:
+                with open(self._config_path(), encoding="utf-8") as f:
+                    cfg = json.load(f)
+                self.app_id     = self.app_id     or cfg.get("app_id",     "")
+                self.api_key    = self.api_key    or cfg.get("api_key",    "")
+                self.api_secret = self.api_secret or cfg.get("api_secret", "")
+            except Exception:
+                pass
 
-    # ── Public API ────────────────────────────────────────────────────────────
+    def save_config(self, app_id: str, api_key: str, api_secret: str) -> None:
+        """Persist credentials to config file and update instance state."""
+        self.app_id     = app_id.strip()
+        self.api_key    = api_key.strip()
+        self.api_secret = api_secret.strip()
+        try:
+            with open(self._config_path(), "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "app_id":     self.app_id,
+                        "api_key":    self.api_key,
+                        "api_secret": self.api_secret,
+                    },
+                    f,
+                    ensure_ascii=False,
+                )
+        except Exception as exc:
+            print(f"[VoiceScorer] Config save error: {exc}")
 
     def score_async(self, wav_path: str, reference_text: str, callback) -> None:
         """
         Score a recording asynchronously.
         callback(result: dict | None, error: str | None)
         result keys: pronunciation, fluency, completeness, overall (0.0–100.0)
+        Special error value: "__TIMEOUT__" → caller should offer retry.
         """
         def _run():
-            if not (self.app_id and self.api_key and self.api_secret):
-                callback(None,
-                         "未配置讯飞 API 凭证\n\n"
-                         "请设置环境变量：\n"
-                         "  XUNFEI_APP_ID\n"
-                         "  XUNFEI_API_KEY\n"
-                         "  XUNFEI_API_SECRET")
+            if not self.has_credentials():
+                callback(
+                    None,
+                    "未配置讯飞 API 凭证\n\n"
+                    "请设置环境变量：\n"
+                    "  XUNFEI_APP_ID\n"
+                    "  XUNFEI_API_KEY\n"
+                    "  XUNFEI_API_SECRET",
+                )
                 return
             if not wav_path or not os.path.isfile(wav_path):
                 callback(None, "录音文件不存在，请先完成录音")
@@ -70,6 +123,8 @@ class VoiceScorer:
             try:
                 result = self._call_ise(wav_path, reference_text or "")
                 callback(result, None)
+            except _Timeout:
+                callback(None, "__TIMEOUT__")
             except OSError as exc:
                 callback(None, f"请检查网络连接，语音评分需联网使用\n({exc})")
             except Exception as exc:
@@ -166,10 +221,17 @@ class VoiceScorer:
             on_close=on_close,
         )
         t = threading.Thread(
-            target=ws.run_forever, kwargs={"ping_timeout": 15}, daemon=True
+            target=ws.run_forever, kwargs={"ping_timeout": 5}, daemon=True
         )
         t.start()
-        done_evt.wait(timeout=30)
+        done_evt.wait(timeout=5)
+
+        if not done_evt.is_set():
+            try:
+                ws.close()
+            except Exception:
+                pass
+            raise _Timeout()
 
         if errors:
             raise OSError(errors[0])
