@@ -146,26 +146,22 @@ QPushButton {{
     border:2px solid {_BLUE};
 }}
 """
-# ── Tab styles for 专项训练 page — underline indicator, transparent bg ─────
+# ── Tab styles for 专项训练 page — pill buttons with bg colour ─────────────
 _TAB_OFF = f"""
 QPushButton {{
-    background: transparent; color: #777;
-    font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
-    font-size: 14px; font-weight: normal;
-    padding: 11px 18px 8px 18px; border-radius: 0;
-    border: none; border-bottom: 3px solid transparent;
-    min-height: 38px;
+    background: #F0F2F5; color: {_BLUE};
+    font-size: 14px; font-weight: bold;
+    padding: 9px 20px; border-radius: 7px;
+    border: 2px solid {_BORDER};
 }}
-QPushButton:hover {{ color: {_BLUE}; border-bottom-color: rgba(0,48,135,0.22); }}
+QPushButton:hover {{ background: {_HI}; border-color: {_BLUE}; }}
 """
 _TAB_ON = f"""
 QPushButton {{
-    background: transparent; color: {_BLUE};
-    font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+    background: {_BLUE}; color: white;
     font-size: 14px; font-weight: bold;
-    padding: 11px 18px 8px 18px; border-radius: 0;
-    border: none; border-bottom: 3px solid {_BLUE};
-    min-height: 38px;
+    padding: 9px 20px; border-radius: 7px;
+    border: 2px solid {_BLUE};
 }}
 """
 
@@ -820,13 +816,12 @@ class MainWindow(QMainWindow):
 
         # ── Top tab bar ────────────────────────────────────────────────────
         top_bar = QFrame()
-        top_bar.setFixedHeight(60)
         top_bar.setStyleSheet(
-            f"background:{_BG}; border-bottom:2px solid {_BORDER};"
+            f"background:{_LIGHT}; border-bottom:1px solid {_BORDER};"
         )
         top_lay = QHBoxLayout(top_bar)
-        top_lay.setContentsMargins(16, 8, 16, 8)
-        top_lay.setSpacing(0)
+        top_lay.setContentsMargins(24, 10, 24, 10)
+        top_lay.setSpacing(10)
 
         # Back to home
         back_btn = QPushButton("← 返回首页")
