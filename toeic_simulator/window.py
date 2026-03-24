@@ -146,6 +146,26 @@ QPushButton {{
     border:2px solid {_BLUE};
 }}
 """
+# ── Tab styles for 专项训练 page — underline indicator, transparent bg ─────
+_TAB_OFF = f"""
+QPushButton {{
+    background: transparent; color: #888;
+    font-size: 14px; font-weight: bold;
+    padding: 11px 18px 8px 18px; border-radius: 0;
+    border: none; border-bottom: 3px solid transparent;
+    min-height: 38px;
+}}
+QPushButton:hover {{ color: {_BLUE}; border-bottom-color: rgba(0,48,135,0.22); }}
+"""
+_TAB_ON = f"""
+QPushButton {{
+    background: transparent; color: {_BLUE};
+    font-size: 14px; font-weight: bold;
+    padding: 11px 18px 8px 18px; border-radius: 0;
+    border: none; border-bottom: 3px solid {_BLUE};
+    min-height: 38px;
+}}
+"""
 
 
 def _make_gear_qicon() -> QIcon:
@@ -247,6 +267,64 @@ def _make_book_qicon() -> QIcon:
     # Two page lines (horizontal)
     p.drawLine(5, 10, 15, 10)
     p.drawLine(5, 14, 15, 14)
+    p.end()
+    return QIcon(pm)
+
+
+def _make_wave_qicon(color_hex: str = "#FFFFFF", size: int = 20) -> QIcon:
+    """
+    Symmetric 5-bar waveform icon for inline button use.
+    Heights follow a bell curve; lines are rounded.
+    """
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color_hex), 2.0, Qt.PenStyle.SolidLine,
+               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    heights = [0.30, 0.58, 0.88, 0.58, 0.30]
+    bar_w = max(2, size // 9)
+    gap   = max(2, size // 7)
+    n     = len(heights)
+    total_w = n * bar_w + (n - 1) * gap
+    x  = (size - total_w) // 2
+    cy = size // 2
+    for h_ratio in heights:
+        h  = max(2, int(h_ratio * (size - 2)))
+        y0 = cy - h // 2
+        y1 = cy + h // 2
+        mid = x + bar_w // 2
+        p.drawLine(mid, y0, mid, y1)
+        x += bar_w + gap
+    p.end()
+    return QIcon(pm)
+
+
+def _make_mic_qicon(color_hex: str) -> QIcon:
+    """
+    Minimal line microphone icon, 24×24 px:
+      • Rounded-rect capsule (body)
+      • Semi-circle stand arc
+      • Vertical stem + horizontal base
+    """
+    from PyQt6.QtCore import QRectF
+    pm = QPixmap(24, 24)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    pen = QPen(QColor(color_hex), 1.8, Qt.PenStyle.SolidLine,
+               Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    # Capsule body
+    p.drawRoundedRect(QRectF(8.5, 2, 7, 12), 3.5, 3.5)
+    # Arc stand (bottom semicircle, centred at x=12 y=14)
+    p.drawArc(QRectF(4, 8, 16, 10), 0, -180 * 16)
+    # Stem
+    p.drawLine(12, 18, 12, 22)
+    # Base
+    p.drawLine(8, 22, 16, 22)
     p.end()
     return QIcon(pm)
 
@@ -514,7 +592,7 @@ class MainWindow(QMainWindow):
 
         lay.addSpacing(24)
 
-        # Two core action buttons only
+        # Main button row: Start Exam | 专项训练 (wave icon) | mic-test icon
         btn_row = QHBoxLayout()
         btn_row.setSpacing(24)
         btn_row.addStretch()
@@ -524,33 +602,28 @@ class MainWindow(QMainWindow):
         self._confirm_btn.clicked.connect(self._on_confirm_set)
         btn_row.addWidget(self._confirm_btn)
 
-        review_mode_btn = QPushButton("背诵复习模式")
-        review_mode_btn.setStyleSheet(_BTN)
-        review_mode_btn.clicked.connect(self._on_enter_review)
-        btn_row.addWidget(review_mode_btn)
+        # 专项训练 button — inline waveform icon on left side
+        train_btn = QPushButton("  专项训练")
+        train_btn.setIcon(_make_wave_qicon("#FFFFFF", 20))
+        train_btn.setIconSize(QSize(20, 20))
+        train_btn.setStyleSheet(_BTN)
+        train_btn.setToolTip("随机练习 / 答案速背 / 高频专练 / 薄弱巩固 / 单项集训")
+        train_btn.clicked.connect(self._on_enter_review)
+        btn_row.addWidget(train_btn)
+
+        # Mic test icon button — 4 colour states (idle / testing / success / fail)
+        self._mic_test_btn = QPushButton()
+        self._mic_test_btn.setIcon(_make_mic_qicon("#BBBBBB"))
+        self._mic_test_btn.setIconSize(QSize(22, 22))
+        self._mic_test_btn.setToolTip(
+            "麦克风试音\n录制 3 秒后自动回放，检测麦克风是否正常"
+        )
+        self._mic_test_btn.clicked.connect(self._on_mic_test)
+        self._update_mic_btn_state("idle")   # apply initial style
+        btn_row.addWidget(self._mic_test_btn)
 
         btn_row.addStretch()
         lay.addLayout(btn_row)
-
-        # [OPT-2] Secondary row: part training + mic test
-        btn_row2 = QHBoxLayout()
-        btn_row2.setSpacing(16)
-        btn_row2.addStretch()
-
-        part_train_btn = QPushButton("专项训练  /  Part Practice")
-        part_train_btn.setStyleSheet(_BTN_SM)
-        part_train_btn.setToolTip("选择单独练习 Part 1–5")
-        part_train_btn.clicked.connect(self._on_part_training)
-        btn_row2.addWidget(part_train_btn)
-
-        mic_test_btn = QPushButton("麦克风试音")
-        mic_test_btn.setStyleSheet(_BTN_SM)
-        mic_test_btn.setToolTip("录制 3 秒并自动回放，检测麦克风是否正常")
-        mic_test_btn.clicked.connect(self._on_mic_test)
-        btn_row2.addWidget(mic_test_btn)
-
-        btn_row2.addStretch()
-        lay.addLayout(btn_row2)
 
         return page
 
@@ -743,34 +816,37 @@ class MainWindow(QMainWindow):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
-        # ── Top bar: sub-mode buttons ──────────────────────────────────────
+        # ── Top tab bar ────────────────────────────────────────────────────
         top_bar = QFrame()
+        top_bar.setFixedHeight(52)
         top_bar.setStyleSheet(
-            f"background:{_LIGHT}; border-bottom:1px solid {_BORDER};"
+            f"background:{_BG}; border-bottom:2px solid {_BORDER};"
         )
         top_lay = QHBoxLayout(top_bar)
-        top_lay.setContentsMargins(24, 12, 24, 12)
-        top_lay.setSpacing(12)
+        top_lay.setContentsMargins(16, 0, 16, 0)
+        top_lay.setSpacing(0)
 
-        # Back to home (text style to match header)
-        back_btn = QPushButton("← 返回首页")
+        # Back to home
+        back_btn = QPushButton("← 首页")
         back_btn.setStyleSheet(_BTN_SM)
+        back_btn.setFixedHeight(32)
         back_btn.clicked.connect(self._on_review_home)
         top_lay.addWidget(back_btn)
 
-        top_lay.addSpacing(16)
+        top_lay.addSpacing(12)
 
-        # Sub-mode buttons
+        # Five sub-mode tab buttons
         self._rev_mode_btns: dict = {}
         modes = [
-            ("random",    "随机练习"),
-            ("speed",     "答案速背"),
-            ("high_freq", "高频题专练"),
-            ("weak",      "薄弱题巩固"),
+            ("random",     "随机练习"),
+            ("speed",      "答案速背"),
+            ("high_freq",  "高频专练"),
+            ("weak",       "薄弱巩固"),
+            ("part_train", "单项集训"),
         ]
         for key, label in modes:
             btn = QPushButton(label)
-            btn.setStyleSheet(_SUB_OFF)
+            btn.setStyleSheet(_TAB_OFF)
             btn.clicked.connect(lambda _=False, k=key: self._load_review_mode(k))
             self._rev_mode_btns[key] = btn
             top_lay.addWidget(btn)
@@ -780,7 +856,7 @@ class MainWindow(QMainWindow):
         # Question counter label
         self._rev_counter_lbl = QLabel("0 / 0")
         self._rev_counter_lbl.setStyleSheet(
-            f"font-size:14px; color:{_BLUE}; font-weight:bold;"
+            f"font-size:13px; color:{_BLUE}; font-weight:bold;"
         )
         top_lay.addWidget(self._rev_counter_lbl)
 
@@ -1206,14 +1282,45 @@ class MainWindow(QMainWindow):
     # ─────────────────────────────────────────────────────────────────────────
     # [OPT-2] Mic test  ───────────────────────────────────────────────────────
     # ─────────────────────────────────────────────────────────────────────────
+    # State colours: idle=gray, testing=blue, success=green, fail=red
+    _MIC_COLORS = {
+        "idle":    ("#BBBBBB", "#CCCCCC"),
+        "testing": ("#5BA4CF", "#5BA4CF"),
+        "success": ("#52B788", "#52B788"),
+        "fail":    ("#E07070", "#E07070"),
+    }
+
+    def _update_mic_btn_state(self, state: str):
+        """Update mic-test button icon colour and border to reflect state."""
+        if not hasattr(self, "_mic_test_btn"):
+            return
+        icon_c, border_c = self._MIC_COLORS.get(state, ("#BBBBBB", "#CCCCCC"))
+        self._mic_test_btn.setIcon(_make_mic_qicon(icon_c))
+        self._mic_test_btn.setIconSize(QSize(22, 22))
+        self._mic_test_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: 1.5px solid {border_c};
+                border-radius: 8px;
+                min-width: 42px; max-width: 42px;
+                min-height: 42px; max-height: 42px;
+                padding: 0px;
+            }}
+            QPushButton:hover {{ background: rgba(0,0,0,0.04); }}
+        """)
+
     def _on_mic_test(self):
         """3-second mic test — record then auto-playback in an isolated dialog."""
         if not self._recorder or not self._recorder.available:
+            self._update_mic_btn_state("fail")
             QMessageBox.information(
                 self, "麦克风不可用",
                 "未检测到麦克风或 pyaudio 未安装。\n请检查设备连接后重试。",
             )
+            self._update_mic_btn_state("idle")
             return
+
+        self._update_mic_btn_state("testing")
 
         dlg = QDialog(self)
         dlg.setWindowTitle("麦克风试音")
@@ -1290,6 +1397,7 @@ class MainWindow(QMainWindow):
         def _do_play():
             wav = state["wav_path"]
             if not wav or not os.path.isfile(wav):
+                self._update_mic_btn_state("fail")
                 status_lbl.setText("⚠ 录音文件未生成，请检查麦克风连接。")
                 start_btn.setEnabled(True)
                 state["phase"] = "idle"
@@ -1297,6 +1405,7 @@ class MainWindow(QMainWindow):
             self._wav_player.play(wav, on_done=_play_done)
 
         def _play_done():
+            self._update_mic_btn_state("success")
             status_lbl.setText(
                 "✓ 试音完成！若您听到了自己的声音，说明麦克风工作正常。"
             )
@@ -1310,6 +1419,8 @@ class MainWindow(QMainWindow):
                     state["qtimer"].stop()
                 self._recorder.stop_recording()
             self._wav_player.stop()
+            # Reset button to idle after dialog closes
+            QTimer.singleShot(1500, lambda: self._update_mic_btn_state("idle"))
 
         start_btn.clicked.connect(_start)
         close_btn.clicked.connect(dlg.accept)
@@ -1610,13 +1721,13 @@ class MainWindow(QMainWindow):
     # Review mode — page navigation  [PRO-5]
     # ─────────────────────────────────────────────────────────────────────────
     def _on_enter_review(self):
-        """Navigate to review page; load random mode by default."""
+        """Navigate to 专项训练 page; load random mode by default."""
         if not self._require_license():
             return
         if not self._review_engine:
             QMessageBox.information(
                 self, "提示",
-                "背诵复习功能正在初始化，请稍后重试。"
+                "专项训练功能正在初始化，请稍后重试。"
             )
             return
         # Stop any review TTS before entering
@@ -1640,6 +1751,25 @@ class MainWindow(QMainWindow):
 
     def _load_review_mode(self, mode: str):
         """Load question list for the given sub-mode and show first question."""
+        # ── 单项集训: show part-selection dialog, then navigate to exam page ──
+        if mode == "part_train":
+            # Highlight the tab
+            for k, btn in self._rev_mode_btns.items():
+                btn.setStyleSheet(_TAB_ON if k == mode else _TAB_OFF)
+            # Stop any ongoing TTS / recording
+            if self._ui_tts:
+                self._ui_tts.interrupt()
+            if self._rev_recording:
+                self._rev_stop_recording()
+            # Show part-selection dialog (navigates to exam page on confirmation)
+            self._on_part_training()
+            # If user cancelled and we're still on review page, revert tab
+            if self._pages.currentIndex() == 3:
+                prev = self._review_mode or "random"
+                for k, btn in self._rev_mode_btns.items():
+                    btn.setStyleSheet(_TAB_ON if k == prev else _TAB_OFF)
+            return
+
         self._review_mode  = mode
         self._review_speed = (mode == "speed")
 
@@ -1667,9 +1797,9 @@ class MainWindow(QMainWindow):
         else:
             qs = self._review_engine.get_random_questions()
 
-        # Update sub-mode button styles
+        # Update tab button styles
         for k, btn in self._rev_mode_btns.items():
-            btn.setStyleSheet(_SUB_ON if k == mode else _SUB_OFF)
+            btn.setStyleSheet(_TAB_ON if k == mode else _TAB_OFF)
 
         if not qs:
             self._review_qs  = []
