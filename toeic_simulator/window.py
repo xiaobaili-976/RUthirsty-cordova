@@ -66,8 +66,8 @@ QPushButton:disabled{{ background:#8899BB; }}
 _SKIP_BTN = """
 QPushButton {
     background:#555; color:white;
-    font-size:13px; font-weight:bold;
-    padding:5px 16px; border-radius:5px;
+    font-size:14px; font-weight:bold;
+    padding:4px 16px; border-radius:5px;
     min-width:70px;
 }
 QPushButton:hover   { background:#333; }
@@ -95,8 +95,8 @@ _ICON_SZ = QSize(24, 24)   # icon canvas / display size
 _BTN_ACT = f"""
 QPushButton {{
     background:{_BLUE}; color:white;
-    font-size:14px; font-weight:bold;
-    padding:7px 18px; border-radius:6px;
+    font-size:15px; font-weight:bold;
+    padding:6px 18px; border-radius:6px;
 }}
 QPushButton:hover   {{ background:#0044B3; }}
 QPushButton:disabled{{ background:#AABBCC; color:#DDD; }}
@@ -105,8 +105,8 @@ QPushButton:disabled{{ background:#AABBCC; color:#DDD; }}
 _MARK_OFF = """
 QPushButton {
     background:#F0F0F0; color:#555;
-    font-size:13px; font-weight:bold;
-    padding:7px 16px; border-radius:6px;
+    font-size:14px; font-weight:bold;
+    padding:6px 16px; border-radius:6px;
     border: 1px solid #CCC;
 }
 QPushButton:hover { background:#E0E0E0; }
@@ -115,16 +115,16 @@ QPushButton:hover { background:#E0E0E0; }
 _MARK_WEAK_ON = """
 QPushButton {
     background:#FF6B6B; color:white;
-    font-size:13px; font-weight:bold;
-    padding:7px 16px; border-radius:6px;
+    font-size:14px; font-weight:bold;
+    padding:6px 16px; border-radius:6px;
 }
 QPushButton:hover { background:#E05050; }
 """
 _MARK_HF_ON = """
 QPushButton {
     background:#F5A623; color:white;
-    font-size:13px; font-weight:bold;
-    padding:7px 16px; border-radius:6px;
+    font-size:14px; font-weight:bold;
+    padding:6px 16px; border-radius:6px;
 }
 QPushButton:hover { background:#D4901D; }
 """
@@ -150,8 +150,8 @@ QPushButton {{
 _TAB_OFF = f"""
 QPushButton {{
     background: #F0F2F5; color: {_BLUE};
-    font-size: 14px; font-weight: bold;
-    padding: 9px 20px; border-radius: 7px;
+    font-size: 15px; font-weight: bold;
+    padding: 8px 20px; border-radius: 7px;
     border: 2px solid {_BORDER};
 }}
 QPushButton:hover {{ background: {_HI}; border-color: {_BLUE}; }}
@@ -159,8 +159,8 @@ QPushButton:hover {{ background: {_HI}; border-color: {_BLUE}; }}
 _TAB_ON = f"""
 QPushButton {{
     background: {_BLUE}; color: white;
-    font-size: 14px; font-weight: bold;
-    padding: 9px 20px; border-radius: 7px;
+    font-size: 15px; font-weight: bold;
+    padding: 8px 20px; border-radius: 7px;
     border: 2px solid {_BLUE};
 }}
 """
