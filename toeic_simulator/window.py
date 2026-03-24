@@ -95,7 +95,7 @@ _ICON_SZ = QSize(24, 24)   # icon canvas / display size
 _BTN_ACT = f"""
 QPushButton {{
     background:{_BLUE}; color:white;
-    font-size:13px; font-weight:bold;
+    font-size:14px; font-weight:bold;
     padding:7px 18px; border-radius:6px;
 }}
 QPushButton:hover   {{ background:#0044B3; }}
@@ -149,8 +149,9 @@ QPushButton {{
 # ── Tab styles for 专项训练 page — underline indicator, transparent bg ─────
 _TAB_OFF = f"""
 QPushButton {{
-    background: transparent; color: #888;
-    font-size: 14px; font-weight: bold;
+    background: transparent; color: #777;
+    font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
+    font-size: 14px; font-weight: normal;
     padding: 11px 18px 8px 18px; border-radius: 0;
     border: none; border-bottom: 3px solid transparent;
     min-height: 38px;
@@ -160,6 +161,7 @@ QPushButton:hover {{ color: {_BLUE}; border-bottom-color: rgba(0,48,135,0.22); }
 _TAB_ON = f"""
 QPushButton {{
     background: transparent; color: {_BLUE};
+    font-family: 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif;
     font-size: 14px; font-weight: bold;
     padding: 11px 18px 8px 18px; border-radius: 0;
     border: none; border-bottom: 3px solid {_BLUE};
@@ -653,7 +655,7 @@ class MainWindow(QMainWindow):
         tp_l = QVBoxLayout(tp)
         tp_l.setContentsMargins(0, 0, 0, 0)
         self._text_lbl = QLabel("")
-        self._text_lbl.setStyleSheet("font-size:19px; color:#111; line-height:1.8;")
+        self._text_lbl.setStyleSheet("font-size:19px; color:#111;")
         self._text_lbl.setWordWrap(True)
         self._text_lbl.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
@@ -892,7 +894,7 @@ class MainWindow(QMainWindow):
         rtp_l = QVBoxLayout(rtp)
         rtp_l.setContentsMargins(0, 0, 0, 0)
         self._rev_text_lbl = QLabel("")
-        self._rev_text_lbl.setStyleSheet("font-size:17px; color:#111; line-height:1.8;")
+        self._rev_text_lbl.setStyleSheet("font-size:17px; color:#111;")
         self._rev_text_lbl.setWordWrap(True)
         self._rev_text_lbl.setAlignment(
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
@@ -1058,7 +1060,7 @@ class MainWindow(QMainWindow):
         )
         self._rev_empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._rev_empty_lbl.setStyleSheet(
-            "font-size:16px; color:#999; line-height:2;"
+            "font-size:16px; color:#999;"
         )
         self._rev_empty_lbl.hide()
 
@@ -2294,7 +2296,7 @@ class MainWindow(QMainWindow):
             self._trial_lbl.setStyleSheet(
                 "color: rgba(255,255,200,0.85); font-size:11px; padding-left:16px;"
             )
-        self._trial_lbl.show()
+        # Header label always stays hidden — trial info is in the settings dropdown only
 
     def _on_update_bank(self):
         """更新题库：选择 Excel/CSV 文件覆盖本地题库，重启后生效。"""
