@@ -30,23 +30,12 @@ jobs:
         working-directory: toeic_simulator
         run: |
           python -m pip install --upgrade pip
-          pip install PyQt6 pyttsx3 pyaudio vosk openpyxl pyinstaller
+          pip install PyQt6 pyttsx3 pyaudio vosk openpyxl websocket-client pyinstaller
 
-      - name: Build with PyInstaller
+      - name: Build with PyInstaller (spec)
         working-directory: toeic_simulator
         shell: pwsh
-        run: |
-          pyinstaller `
-            --onefile `
-            --windowed `
-            --name "TOEIC_Speaking_Simulator" `
-            --hidden-import "pyttsx3.drivers" `
-            --hidden-import "pyttsx3.drivers.sapi5" `
-            --hidden-import "pyttsx3.drivers.nsss" `
-            --hidden-import "pyttsx3.drivers.espeak" `
-            --hidden-import "vosk" `
-            --collect-all PyQt6 `
-            main.py
+        run: pyinstaller toeic_pro.spec
 
       - name: Generate question_bank.xlsx from JSON
         working-directory: toeic_simulator
@@ -62,7 +51,7 @@ jobs:
           New-Item -ItemType Directory -Path release\records      -Force | Out-Null
           New-Item -ItemType Directory -Path release\model        -Force | Out-Null
 
-          Copy-Item dist\TOEIC_Speaking_Simulator.exe release\
+          Copy-Item dist\TOEIC_Speaking_Pro.exe release\
           Copy-Item question_bank.xlsx               release\
           if (Test-Path images) { Copy-Item images release\images -Recurse -Force }
 
@@ -76,7 +65,7 @@ jobs:
              Sheet 结构：Sets | Part1 | Part2 | Part3 | Part4 | Part5
           2. Part 2 图片放入 images\set1\、images\set2\ 等子文件夹，
              路径须与 xlsx 中一致。
-          3. 双击 TOEIC_Speaking_Simulator.exe 启动程序。
+          3. 双击 TOEIC_Speaking_Pro.exe 启动程序。
           4. 首次启动进入 3 天试用期，标题栏实时倒计时。
           5. 试用到期后程序提示联系开发者获取授权。
 
