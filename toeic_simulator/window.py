@@ -1312,9 +1312,10 @@ class MainWindow(QMainWindow):
     def _on_replay_toggle(self):
         """
         Exam-page recording playback.
-        • Freezes timer *display* (engine timer keeps running).
+        • Pauses engine timer AND freezes timer display.
+        • Stops any running TTS (engine + UI).
         • Shows a modal countdown dialog: "录音回放中（N 秒）".
-        • Dialog auto-closes when playback finishes; display resumes.
+        • Dialog auto-closes when playback finishes; timer resumes.
         """
         # ── Stop ongoing playback ────────────────────────────────────────────
         if self._wav_player.is_playing():
@@ -1326,6 +1327,15 @@ class MainWindow(QMainWindow):
             return
 
         duration = self._wav_duration(self._last_wav_path)
+
+        # ── Stop TTS + pause timer ───────────────────────────────────────────
+        try:
+            self._engine.tts.interrupt()
+        except Exception:
+            pass
+        if self._ui_tts:
+            self._ui_tts.interrupt()
+        self._engine.pause_timer()
 
         # ── Freeze display ───────────────────────────────────────────────────
         self._replay_display_paused = True
@@ -1376,6 +1386,7 @@ class MainWindow(QMainWindow):
             self._wav_player.stop()
             self._replay_display_paused = False
             self._replay_btn.setText("回放录音")
+            self._engine.resume_timer()
 
         # on_done fires via QTimer.singleShot → runs inside dlg.exec() loop
         def _on_playback_done():
@@ -1394,6 +1405,7 @@ class MainWindow(QMainWindow):
         # Safety net (covers Esc / Alt-F4 close)
         self._replay_display_paused = False
         self._replay_btn.setText("回放录音")
+        self._engine.resume_timer()
 
     def _on_end_replay_toggle(self):
         """Toggle end-page playback of the last recording."""
@@ -2170,55 +2182,195 @@ class MainWindow(QMainWindow):
 
     def _do_voice_score(self, wav_path: str, answer_text: str, scorer, btn):
         """
-        Launch async scoring. Timer must already be paused before calling.
-        Handles all remaining scenarios (2, 3, 5, 6, 7) inside the callback.
+        Show a modal "评估中" dialog and launch async scoring.
+        Timer must already be paused before calling.
+
+        Auto-retries up to _MAX_SCORE_RETRIES times on __TIMEOUT__, then
+        auto-closes.  User can also manually cancel at any time.
         """
+        _MAX_SCORE_RETRIES = 5
+        _SCORE_TIMEOUT_SEC = 5   # matches VoiceScorer 5-second timeout
+
+        # Stop any running TTS so the dialog is the only thing happening
+        try:
+            self._engine.tts.interrupt()
+        except Exception:
+            pass
+        if self._ui_tts:
+            self._ui_tts.interrupt()
+
         if btn:
             btn.setEnabled(False)
-            btn.setText("评分中…")
 
-        def _callback(result, error):
-            QTimer.singleShot(0, lambda: _on_main(result, error))
+        # Shared mutable state across retry attempts
+        state = {
+            "retries":   0,       # attempts already made
+            "cancelled": False,   # user clicked cancel
+            "done":      False,   # async callback fired
+            "result":    None,
+            "error":     None,
+        }
 
-        def _on_main(result, error):
-            if btn:
-                btn.setEnabled(True)
-                btn.setText("语音评分")
+        def _launch_attempt():
+            """Create a fresh dialog for one scoring attempt."""
+            if state["cancelled"]:
+                return
 
-            # Scenario 5: 5-second timeout → retry dialog
-            if error == "__TIMEOUT__":
-                reply = QMessageBox.question(
-                    self,
-                    "评分超时",
-                    "评分超时，是否重试？",
-                    QMessageBox.StandardButton.Retry | QMessageBox.StandardButton.Close,
-                    QMessageBox.StandardButton.Retry,
-                )
-                if reply == QMessageBox.StandardButton.Retry:
-                    self._do_voice_score(wav_path, answer_text, scorer, btn)
+            # Reset per-attempt "done" flag so Esc detection works each round
+            state["done"]   = False
+            state["result"] = None
+            state["error"]  = None
+
+            attempt = state["retries"] + 1
+            if attempt == 1:
+                title_text = "正在评估中…"
+            else:
+                title_text = f"正在评估中… （第 {attempt} / {_MAX_SCORE_RETRIES} 次）"
+
+            # ── Build dialog ───────────────────────────────────────────────
+            dlg = QDialog(self)
+            dlg.setWindowTitle("语音评分")
+            dlg.setWindowFlags(
+                Qt.WindowType.Dialog | Qt.WindowType.WindowStaysOnTopHint
+            )
+            dlg.setModal(True)
+            dlg.setMinimumWidth(320)
+            dlg.setStyleSheet(f"QDialog {{ background:{_BG}; }}")
+            vb = QVBoxLayout(dlg)
+            vb.setContentsMargins(28, 24, 28, 18)
+            vb.setSpacing(14)
+
+            status_lbl = QLabel(title_text)
+            status_lbl.setStyleSheet(
+                f"font-size:16px; font-weight:bold; color:{_BLUE};"
+            )
+            status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            vb.addWidget(status_lbl)
+
+            countdown_rem = [_SCORE_TIMEOUT_SEC]
+            count_lbl = QLabel(f"预计剩余 {countdown_rem[0]} 秒…")
+            count_lbl.setStyleSheet("font-size:14px; color:#555;")
+            count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            vb.addWidget(count_lbl)
+
+            cancel_btn = QPushButton("取消")
+            cancel_btn.setStyleSheet(_BTN_SM)
+            vb.addWidget(cancel_btn, 0, Qt.AlignmentFlag.AlignCenter)
+
+            # Countdown QTimer
+            tick_timer = QTimer(dlg)
+            tick_timer.setInterval(1000)
+
+            def _tick():
+                countdown_rem[0] -= 1
+                if countdown_rem[0] > 0:
+                    count_lbl.setText(f"预计剩余 {countdown_rem[0]} 秒…")
                 else:
+                    tick_timer.stop()
+                    count_lbl.setText("等待服务器响应…")
+
+            tick_timer.timeout.connect(_tick)
+            tick_timer.start()
+
+            # ── Async callback (fires on worker thread → route to main thread) ──
+            def _callback(result, error):
+                QTimer.singleShot(0, lambda: _on_main(dlg, status_lbl, count_lbl,
+                                                       tick_timer, result, error))
+
+            def _on_main(dlg, status_lbl, count_lbl, tick_timer, result, error):
+                tick_timer.stop()
+                state["done"]   = True
+                state["result"] = result
+                state["error"]  = error
+
+                if state["cancelled"]:
+                    return
+
+                if error == "__TIMEOUT__":
+                    state["retries"] += 1
+                    if state["retries"] < _MAX_SCORE_RETRIES:
+                        # Show "超时重试" then auto-close to trigger next attempt
+                        status_lbl.setText(
+                            f"超时，自动重试（第 {state['retries'] + 1} / "
+                            f"{_MAX_SCORE_RETRIES} 次）…"
+                        )
+                        count_lbl.setText("")
+                        QTimer.singleShot(800, dlg.accept)
+                    else:
+                        # All retries exhausted → auto-close
+                        status_lbl.setText("评分超时，已达最大重试次数")
+                        count_lbl.setText("自动关闭中…")
+                        QTimer.singleShot(1200, dlg.reject)
+                    return
+
+                # Non-timeout result (success or error): close immediately
+                dlg.accept()
+
+            # ── Dialog finished handler ────────────────────────────────────
+            def _on_finished(_code):
+                tick_timer.stop()
+                if state["cancelled"]:
+                    # User cancelled
+                    if btn:
+                        btn.setEnabled(True)
+                        btn.setText("语音评分")
                     self._engine.resume_timer()
-                return
+                    return
 
-            if error:
-                # Scenario 3: network error
-                if "网络" in error or "OSError" in error.lower():
-                    msg = "请检查网络连接，语音评分需联网使用。"
-                # Scenario 2: invalid/unconfigured credentials
-                elif "未配置" in error:
-                    msg = error
-                # Scenario 6: other API failure
-                else:
-                    msg = "评分失败，请重试。"
-                QMessageBox.warning(self, "语音评分", msg)
+                if not state["done"]:
+                    # Dialog closed before async returned (e.g. Esc / Alt-F4)
+                    state["cancelled"] = True
+                    if btn:
+                        btn.setEnabled(True)
+                        btn.setText("语音评分")
+                    self._engine.resume_timer()
+                    return
+
+                error  = state["error"]
+                result = state["result"]
+
+                if error == "__TIMEOUT__" and state["retries"] < _MAX_SCORE_RETRIES:
+                    # Schedule next attempt after current exec() fully unwinds
+                    QTimer.singleShot(100, _launch_attempt)
+                    return
+
+                # ── Final outcome ──────────────────────────────────────────
+                if btn:
+                    btn.setEnabled(True)
+                    btn.setText("语音评分")
+
+                if error == "__TIMEOUT__":
+                    # Already shown "已达最大重试次数" inside dialog; just resume
+                    self._engine.resume_timer()
+                    return
+
+                if error:
+                    if "网络" in error or "oserror" in error.lower():
+                        msg = "请检查网络连接，语音评分需联网使用。"
+                    elif "未配置" in error:
+                        msg = error
+                    else:
+                        msg = "评分失败，请重试。"
+                    QMessageBox.warning(self, "语音评分", msg)
+                    self._engine.resume_timer()
+                    return
+
+                # Success
+                self._show_score_result_dialog(result)
                 self._engine.resume_timer()
-                return
 
-            # Scenario 7: success → result dialog (timer stays paused during dialog)
-            self._show_score_result_dialog(result)
-            self._engine.resume_timer()
+            def _on_user_cancel():
+                state["cancelled"] = True
+                tick_timer.stop()
+                dlg.reject()
 
-        scorer.score_async(wav_path, answer_text, _callback)
+            cancel_btn.clicked.connect(_on_user_cancel)
+            dlg.finished.connect(_on_finished)
+
+            scorer.score_async(wav_path, answer_text, _callback)
+            dlg.exec()
+
+        _launch_attempt()
 
     def _show_score_result_dialog(self, result: dict):
         """Show scoring result dialog (timer must already be paused)."""
