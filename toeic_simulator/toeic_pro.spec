@@ -15,7 +15,8 @@ SRC = os.path.dirname(os.path.abspath(SPEC))
 # Only include files/directories that actually exist at build time
 _extra_datas = []
 for fname in ('question_bank.json', 'questions.json',
-              'answer_templates.json', 'question_bank.xlsx'):
+              'answer_templates.json', 'question_bank.xlsx',
+              'app_icon.ico'):
     fpath = os.path.join(SRC, fname)
     if os.path.isfile(fpath):
         _extra_datas.append((fpath, '.'))
@@ -79,6 +80,11 @@ a = Analysis(
         'wsgiref.handlers',
         'threading',
         'subprocess',
+        # ── Pillow (icon generation helper) ──
+        'PIL',
+        'PIL.Image',
+        'PIL.ImageDraw',
+        'PIL.ImageFilter',
     ],
     hookspath=[],
     hooksconfig={},
@@ -86,7 +92,7 @@ a = Analysis(
     excludes=[
         'tkinter', '_tkinter',
         'matplotlib', 'numpy', 'scipy',
-        'PIL', 'IPython', 'notebook',
+        'IPython', 'notebook',
         'pandas', 'sqlalchemy',
     ],
     win_no_prefer_redirects=False,
@@ -117,6 +123,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    # Uncomment next line and provide icon.ico to set a custom app icon:
-    # icon=os.path.join(SRC, 'icon.ico'),
+    icon=os.path.join(SRC, 'app_icon.ico'),
 )

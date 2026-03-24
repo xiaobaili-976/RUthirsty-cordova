@@ -58,6 +58,10 @@ jobs:
 
           Copy-Item dist\TOEIC_Speaking_Pro.exe release\
 
+          if (Test-Path app_icon.ico) {
+            Copy-Item app_icon.ico release\
+          }
+
           if (Test-Path question_bank.xlsx) {
             Copy-Item question_bank.xlsx release\
           } elseif (Test-Path question_bank.json) {
@@ -93,8 +97,15 @@ jobs:
             - 背诵复习模式：随机练习 / 答案速背 / 高频题专练 / 薄弱题巩固
             - 标记高频 / 薄弱题并本地存储
             - 语音评分（讯飞 ISE API，联网，评分期间自动暂停计时）
-            - 3 天试用期 + 邀请码激活，右上角齿轮/退出图标自动切换
-            - 题库支持 Excel / JSON / CSV，运行时热替换
+            - 3 天试用期 + 邀请码激活
+
+            ### v1.0 优化方案新增
+            - 🎧 作答音频一键回放（考试栏 + 结束页）
+            - 🎤 考前麦克风试音检测（3 秒录制自动回放）
+            - 📋 单 PART 专项训练模式（Part 1–5 独立练习）
+            - 📊 考试结束简易成绩报告（用时 / 各 PART 录音完成率 / 薄弱项）
+            - 🔒 激活/开发者模式下隐藏右上角按钮，用原生 × 关闭
+            - 🖼 全新极简商务风应用图标（256×256 ICO，7 档嵌入尺寸）
 
             ### 下载使用
             下载 zip，解压后双击 `TOEIC_Speaking_Pro.exe`，详见 README.txt。
