@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item
+        android:id="@+id/nav_home"
+        android:icon="@drawable/ic_home"
+        android:title="@string/nav_home" />
+
+    <item
+        android:id="@+id/nav_knowledge"
+        android:icon="@drawable/ic_book"
+        android:title="@string/nav_knowledge" />
+
+    <item
+        android:id="@+id/nav_ukulele"
+        android:icon="@drawable/ic_ukulele"
+        android:title="@string/nav_ukulele" />
+
+    <item
+        android:id="@+id/nav_singing"
+        android:icon="@drawable/ic_mic"
+        android:title="@string/nav_singing" />
+
+    <item
+        android:id="@+id/nav_library"
+        android:icon="@drawable/ic_library"
+        android:title="@string/nav_library" />
+
+</menu>

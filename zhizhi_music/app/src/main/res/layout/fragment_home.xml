@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorBackground">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Top Bar: Avatar + Global Settings -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="16dp">
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/avatarCard"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
+                app:cardCornerRadius="28dp"
+                app:cardElevation="4dp"
+                android:layout_marginEnd="12dp">
+                <ImageView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:src="@drawable/ic_avatar"
+                    android:scaleType="centerCrop" />
+            </com.google.android.material.card.MaterialCardView>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="知知小音乐"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="?attr/colorOnSurface" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="儿童尤克里里+唱歌训练助手"
+                    android:textSize="12sp"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnVoiceToggle"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                app:icon="@drawable/ic_volume_up" />
+        </LinearLayout>
+
+        <!-- Global Switches Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="2dp"
+            android:layout_marginBottom="16dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="全局设置"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="?attr/colorPrimary"
+                    android:layout_marginBottom="8dp" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="护眼模式" android:textSize="14sp" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/switchEyeCare" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="儿童锁定" android:textSize="14sp" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/switchChildLock" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="4dp">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="背景音乐" android:textSize="14sp" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/switchBgMusic" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="语音朗读" android:textSize="14sp" />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/switchVoiceRead" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Daily Plan Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardDailyPlan"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="4dp"
+            app:cardBackgroundColor="@color/card_plan_bg"
+            android:layout_marginBottom="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="8dp">
+                    <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_plan" android:layout_marginEnd="8dp" />
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="今日AI练习计划" android:textSize="16sp" android:textStyle="bold" android:textColor="?attr/colorOnSurface" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnReadPlan"
+                        style="@style/Widget.Material3.Button.IconButton.Tonal"
+                        android:layout_width="36dp"
+                        android:layout_height="36dp"
+                        app:icon="@drawable/ic_volume_up" />
+                </LinearLayout>
+                <TextView
+                    android:id="@+id/tvDailyPlan"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="正在加载今日计划..."
+                    android:textSize="14sp"
+                    android:lineSpacingMultiplier="1.5"
+                    android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Stats Cards -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                app:cardCornerRadius="12dp"
+                android:layout_marginEnd="8dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp" android:gravity="center">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="今日练琴" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                    <TextView android:id="@+id/tvTodayTime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0分0秒" android:textSize="18sp" android:textStyle="bold" android:textColor="?attr/colorPrimary" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                app:cardCornerRadius="12dp"
+                android:layout_marginStart="8dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp" android:gravity="center">
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="本周练琴" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                    <TextView android:id="@+id/tvWeekTime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0分0秒" android:textSize="18sp" android:textStyle="bold" android:textColor="@color/md_theme_tertiary" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+
+        <!-- Progress Bar Stage -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            android:layout_marginBottom="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="8dp">
+                    <ImageView android:layout_width="20dp" android:layout_height="20dp" android:src="@drawable/ic_trophy" android:layout_marginEnd="6dp" />
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="闯关进度" android:textSize="14sp" android:textStyle="bold" />
+                    <TextView android:id="@+id/tvStageLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="第1关" android:textSize="12sp" android:textColor="?attr/colorPrimary" />
+                </LinearLayout>
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progressBarStage"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:progress="1"
+                    android:max="10"
+                    style="@style/Widget.Material3.LinearProgressIndicator" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Streak Stats -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="24dp">
+
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                <TextView android:id="@+id/tvConsecutiveDays" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0天" android:textSize="22sp" android:textStyle="bold" android:textColor="@color/streak_color" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="连续打卡" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                <TextView android:id="@+id/tvTotalSessions" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0次" android:textSize="22sp" android:textStyle="bold" android:textColor="?attr/colorPrimary" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="累计练习" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Quick Access Buttons -->
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="快捷入口" android:textSize="16sp" android:textStyle="bold" android:layout_marginBottom="12dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnUkulele"
+                style="@style/Widget.Material3.Button.ElevatedButton"
+                android:layout_width="0dp"
+                android:layout_height="80dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:text="尤克里里\n助手"
+                app:icon="@drawable/ic_ukulele"
+                app:iconGravity="top"
+                android:textSize="12sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnSinging"
+                style="@style/Widget.Material3.Button.ElevatedButton"
+                android:layout_width="0dp"
+                android:layout_height="80dp"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:text="唱歌\n助手"
+                app:icon="@drawable/ic_mic"
+                app:iconGravity="top"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnLibrary"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp"
+                android:layout_height="80dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:text="曲库\n中心"
+                app:icon="@drawable/ic_library"
+                app:iconGravity="top"
+                android:textSize="12sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnKnowledge"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp"
+                android:layout_height="80dp"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:text="基础\n知识"
+                app:icon="@drawable/ic_book"
+                app:iconGravity="top"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- Check-in Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnCheckIn"
+            style="@style/Widget.Material3.Button"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:text="今日打卡"
+            app:icon="@drawable/ic_check"
+            android:textSize="16sp"
+            android:layout_marginBottom="24dp" />
+
+    </LinearLayout>
+</ScrollView>

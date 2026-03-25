@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/nav_home">
+
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="com.zhizhi.music.ui.home.HomeFragment"
+        android:label="首页"
+        tools:layout="@layout/fragment_home" />
+
+    <fragment
+        android:id="@+id/nav_knowledge"
+        android:name="com.zhizhi.music.ui.knowledge.KnowledgeFragment"
+        android:label="基础知识"
+        tools:layout="@layout/fragment_knowledge" />
+
+    <fragment
+        android:id="@+id/nav_ukulele"
+        android:name="com.zhizhi.music.ui.ukulele.UkuleleFragment"
+        android:label="尤克里里助手"
+        tools:layout="@layout/fragment_ukulele" />
+
+    <fragment
+        android:id="@+id/nav_singing"
+        android:name="com.zhizhi.music.ui.singing.SingingFragment"
+        android:label="唱歌助手"
+        tools:layout="@layout/fragment_singing" />
+
+    <fragment
+        android:id="@+id/nav_library"
+        android:name="com.zhizhi.music.ui.library.LibraryFragment"
+        android:label="曲库中心"
+        tools:layout="@layout/fragment_library" />
+
+</navigation>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ukulele icon: simplified instrument shape -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <path android:fillColor="@android:color/white"
+        android:pathData="M9,3L9,13.09C8.41,13.35 8,13.93 8,14.6 8,15.5 8.72,16.22 9.62,16.22c0.9,0 1.62,-0.72 1.62,-1.62 0,-0.67 -0.41,-1.25 -1,-1.51V3h-1.24zM14.38,3c-0.9,0 -1.62,0.72 -1.62,1.62 0,0.67 0.41,1.25 1,1.51v10.47H15V6.13C15.59,5.87 16,5.29 16,4.62 16,3.72 15.28,3 14.38,3z"/>
+</vector>
