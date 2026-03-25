@@ -977,7 +977,7 @@ class MainWindow(QMainWindow):
         # Secondary frame (Part 3/4 question text)
         self._rev_sec_frame = QFrame()
         self._rev_sec_frame.setStyleSheet(
-            f"background:{_HI}; border-radius:7px; margin-top:8px;"
+            f"background:{_HI}; border-radius:7px; margin-top:2px;"
         )
         rsi = QVBoxLayout(self._rev_sec_frame)
         rsi.setContentsMargins(16, 10, 16, 10)
@@ -994,19 +994,19 @@ class MainWindow(QMainWindow):
         self._rev_ans_frame = QFrame()
         self._rev_ans_frame.setStyleSheet(
             f"background:#F8F8F8; border:1px solid {_BORDER}; "
-            f"border-radius:6px; margin-top:8px;"
+            f"border-radius:6px; margin-top:2px;"
         )
         raf = QVBoxLayout(self._rev_ans_frame)
         raf.setContentsMargins(12, 8, 12, 8)
         ans_title = QLabel("参考答案 / Reference Answer")
         ans_title.setStyleSheet(
-            f"color:{_BLUE}; font-size:12px; font-weight:bold; border:none;"
+            f"color:{_BLUE}; font-size:14px; font-weight:bold; border:none;"
         )
         raf.addWidget(ans_title)
         self._rev_ans_te = QTextEdit()
         self._rev_ans_te.setReadOnly(True)
-        self._rev_ans_te.setMinimumHeight(80)
-        self._rev_ans_te.setMaximumHeight(160)
+        self._rev_ans_te.setMinimumHeight(96)
+        self._rev_ans_te.setMaximumHeight(190)
         self._rev_ans_te.setStyleSheet(
             "background:#F8F8F8; border:none; color:#333;"
         )
@@ -2024,13 +2024,13 @@ class MainWindow(QMainWindow):
             html_body = (
                 f'<p style="'
                 f'font-family: Calibri, Georgia, Arial, sans-serif;'
-                f'font-size: 13pt; color: #333333; line-height: 1.5; margin:0;">'
+                f'font-size: 16pt; color: #333333; line-height: 1.5; margin:0;">'
                 f'{escaped}</p>'
             )
         else:
             html_body = (
                 '<p style="font-family:Calibri,Arial,sans-serif;'
-                'font-size:13pt;color:#888;font-style:italic;margin:0;">'
+                'font-size:16pt;color:#888;font-style:italic;margin:0;">'
                 '（本题暂无参考答案）</p>'
             )
         self._rev_ans_te.setHtml(html_body)

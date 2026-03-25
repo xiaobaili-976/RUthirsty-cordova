@@ -2,7 +2,7 @@
 setlocal
 echo ============================================================
 echo  TOEIC Speaking Pro — Build Script
-echo  Output: dist\TOEIC_Speaking_Pro.exe  (single file)
+echo  Output: Release\TOEIC_Speaking_Pro.exe  (single file)
 echo ============================================================
 echo.
 
@@ -16,8 +16,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo [2/4] Building EXE with PyInstaller (using toeic_pro.spec)...
-pyinstaller toeic_pro.spec --clean --noconfirm
+echo [2/4] Building EXE with PyInstaller...
+pyinstaller toeic_pro.spec --clean --noconfirm --distpath Release
 if errorlevel 1 (
     echo ERROR: PyInstaller build failed.
     pause & exit /b 1
@@ -25,18 +25,18 @@ if errorlevel 1 (
 
 echo.
 echo [3/4] Preparing runtime distribution folder...
-if not exist "dist\images"  mkdir "dist\images"
-if not exist "dist\records" mkdir "dist\records"
-if not exist "dist\model"   mkdir "dist\model"
+if not exist "Release\images"  mkdir "Release\images"
+if not exist "Release\records" mkdir "Release\records"
+if not exist "Release\model"   mkdir "Release\model"
 
 :: Copy question bank files if they exist
 for %%f in (question_bank.xlsx question_bank.json questions.json) do (
-    if exist "%%f" copy /Y "%%f" "dist\" >nul
+    if exist "%%f" copy /Y "%%f" "Release\" >nul
 )
 
 :: Copy images folder if present
 if exist "images" (
-    xcopy /E /I /Y "images" "dist\images" >nul
+    xcopy /E /I /Y "images" "Release\images" >nul
 )
 
 echo.
@@ -78,11 +78,11 @@ echo   model\                   vosk 语音模型（可选）
 echo.
 echo 【系统要求】
 echo   Windows 10 / 11 (64 位)，无需安装任何运行库。
-) > "dist\README.txt"
+) > "Release\README.txt"
 
 echo.
 echo ============================================================
 echo  Build complete!
-echo  EXE: dist\TOEIC_Speaking_Pro.exe
+echo  EXE: Release\TOEIC_Speaking_Pro.exe
 echo ============================================================
 pause

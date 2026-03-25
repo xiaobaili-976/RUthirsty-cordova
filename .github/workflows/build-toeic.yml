@@ -33,11 +33,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Build with PyInstaller
-        working-directory: toeic_simulator
-        shell: pwsh
-        run: pyinstaller toeic_pro.spec --clean --noconfirm
-
       - name: Generate question_bank.xlsx from JSON (if needed)
         working-directory: toeic_simulator
         shell: pwsh
@@ -46,35 +41,41 @@ jobs:
             python make_question_bank_xlsx.py
           }
 
-      - name: Package release folder
+      - name: Build with PyInstaller
+        working-directory: toeic_simulator
+        shell: pwsh
+        run: pyinstaller toeic_pro.spec --clean --noconfirm --distpath Release
+
+      - name: Populate Release folder
+        working-directory: toeic_simulator
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path Release\images  -Force | Out-Null
+          New-Item -ItemType Directory -Path Release\records -Force | Out-Null
+          New-Item -ItemType Directory -Path Release\model   -Force | Out-Null
+
+          if (Test-Path app_icon.ico) {
+            Copy-Item app_icon.ico Release\
+          }
+
+          if (Test-Path question_bank.xlsx) {
+            Copy-Item question_bank.xlsx Release\
+          } elseif (Test-Path question_bank.json) {
+            Copy-Item question_bank.json Release\
+          }
+
+          if (Test-Path images) {
+            Copy-Item images Release\images -Recurse -Force
+          }
+
+          Copy-Item DIST_README.txt Release\README.txt
+
+      - name: Create release zip
         working-directory: toeic_simulator
         shell: pwsh
         run: |
           $v = "v1.0.${{ github.run_number }}"
-
-          New-Item -ItemType Directory -Path release\images  -Force | Out-Null
-          New-Item -ItemType Directory -Path release\records -Force | Out-Null
-          New-Item -ItemType Directory -Path release\model   -Force | Out-Null
-
-          Copy-Item dist\TOEIC_Speaking_Pro.exe release\
-
-          if (Test-Path app_icon.ico) {
-            Copy-Item app_icon.ico release\
-          }
-
-          if (Test-Path question_bank.xlsx) {
-            Copy-Item question_bank.xlsx release\
-          } elseif (Test-Path question_bank.json) {
-            Copy-Item question_bank.json release\
-          }
-
-          if (Test-Path images) {
-            Copy-Item images release\images -Recurse -Force
-          }
-
-          Copy-Item DIST_README.txt release\README.txt
-
-          Compress-Archive -Path release\* -DestinationPath TOEIC_Speaking_Pro_Windows_$v.zip
+          Compress-Archive -Path Release\* -DestinationPath TOEIC_Speaking_Pro_Windows_$v.zip
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
