@@ -14,7 +14,6 @@ from styles import (
     NAV_HEIGHT, STATUS_QSS
 )
 from widgets.nav_bar import NavBar
-from widgets.sidebar import Sidebar
 from widgets.right_drawer import RightDrawer
 
 # Pages
@@ -71,10 +70,6 @@ class MainWindow(QMainWindow):
         body_row = QHBoxLayout()
         body_row.setContentsMargins(0, 0, 0, 0)
         body_row.setSpacing(0)
-
-        self._sidebar = Sidebar(self._mgr, self)
-        self._sidebar.employee_selected.connect(self._on_employee_selected)
-        body_row.addWidget(self._sidebar)
 
         # ── Page stack ────────────────────────────────────────────────────
         # Tab indices: 0=首页, 1=基础信息, 2=合同, 3=薪酬, 4=人岗, 5=激励, 6=晴雨表
@@ -166,4 +161,3 @@ class MainWindow(QMainWindow):
         for p in self._pages:
             p.refresh()
         self._refresh_status()
-        self._sidebar.refresh()

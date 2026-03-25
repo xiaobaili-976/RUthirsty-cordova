@@ -153,7 +153,7 @@ TABLE_QSS = f"""
 
 # ── Form inputs ───────────────────────────────────────────────────────────────
 INPUT_QSS = f"""
-    QLineEdit, QTextEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox {{
+    QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
         border: 1px solid {_BORDER};
         border-radius: 5px;
         padding: 6px 10px;
@@ -162,8 +162,67 @@ INPUT_QSS = f"""
         color: {_TEXT};
     }}
     QLineEdit:focus, QTextEdit:focus, QComboBox:focus,
-    QDateEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
+    QSpinBox:focus, QDoubleSpinBox:focus {{
         border-color: {_BLUE};
+    }}
+    QDateEdit {{
+        border: 1px solid {_BORDER};
+        border-radius: 5px;
+        padding: 4px 28px 4px 10px;
+        background: white;
+        font-size: 13px;
+        color: {_TEXT};
+        min-height: 24px;
+    }}
+    QDateEdit:focus {{
+        border-color: {_BLUE};
+    }}
+    QDateEdit::drop-down {{
+        subcontrol-origin: border;
+        subcontrol-position: center right;
+        width: 24px;
+        border-left: 1px solid {_BORDER};
+        border-top-right-radius: 5px;
+        border-bottom-right-radius: 5px;
+        background: {_LIGHT};
+    }}
+    QDateEdit::drop-down:hover {{
+        background: {_BLUE_LIGHT};
+    }}
+    QDateEdit::down-arrow {{
+        width: 10px;
+        height: 10px;
+    }}
+    QCalendarWidget QWidget#qt_calendar_navigationbar {{
+        background: {_BLUE};
+        border-radius: 6px 6px 0 0;
+    }}
+    QCalendarWidget QToolButton {{
+        color: white;
+        background: transparent;
+        border: none;
+        font-size: 13px;
+        padding: 4px 8px;
+    }}
+    QCalendarWidget QToolButton:hover {{
+        background: rgba(255,255,255,0.15);
+        border-radius: 4px;
+    }}
+    QCalendarWidget QSpinBox {{
+        color: white;
+        background: transparent;
+        border: none;
+        font-size: 13px;
+    }}
+    QCalendarWidget QAbstractItemView:enabled {{
+        font-size: 12px;
+        color: {_TEXT};
+        background: white;
+        selection-background-color: {_BLUE};
+        selection-color: white;
+    }}
+    QCalendarWidget QAbstractItemView:disabled {{
+        color: #aaa;
     }}
 """
 

@@ -573,41 +573,34 @@ class OrgChartView(QGraphicsView):
         )
         self._panning = False
         self._pan_start = QPointF()
+        # Intercept at viewport level so nodes don't swallow middle-button events
+        self.viewport().installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if obj is self.viewport():
+            t = event.type()
+            if t == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.MiddleButton:
+                self._panning = True
+                self._pan_start = event.position()
+                self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+                return True
+            elif t == QEvent.Type.MouseMove and self._panning:
+                delta = event.position() - self._pan_start
+                self._pan_start = event.position()
+                self.horizontalScrollBar().setValue(
+                    self.horizontalScrollBar().value() - int(delta.x()))
+                self.verticalScrollBar().setValue(
+                    self.verticalScrollBar().value() - int(delta.y()))
+                return True
+            elif t == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.MiddleButton:
+                self._panning = False
+                self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
+                return True
+        return super().eventFilter(obj, event)
 
     def wheelEvent(self, event: QWheelEvent):
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
         self.scale(factor, factor)
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.MiddleButton:
-            self._panning = True
-            self._pan_start = event.position()
-            self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
-            event.accept()
-            return
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        if self._panning:
-            delta = event.position() - self._pan_start
-            self._pan_start = event.position()
-            self.horizontalScrollBar().setValue(
-                self.horizontalScrollBar().value() - int(delta.x())
-            )
-            self.verticalScrollBar().setValue(
-                self.verticalScrollBar().value() - int(delta.y())
-            )
-            event.accept()
-            return
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.MiddleButton:
-            self._panning = False
-            self.setCursor(QCursor(Qt.CursorShape.ArrowCursor))
-            event.accept()
-            return
-        super().mouseReleaseEvent(event)
 
 
 # ── DashboardPage ─────────────────────────────────────────────────────────────
@@ -692,7 +685,7 @@ class DashboardPage(QWidget):
         lay.addLayout(toolbar)
 
         # ── Hint label ──
-        hint = QLabel("右键部门/小组节点管理 · 滚轮缩放 · 中键拖拽平移 · 拖拽人员节点调整归属")
+        hint = QLabel("右键部门/小组节点管理 · 滚轮缩放 · 鼠标中键拖拽平移（在节点上同样有效）· 拖拽人员节点调整归属")
         hint.setStyleSheet("color: #86909C; font-size: 11px;")
         lay.addWidget(hint)
 
