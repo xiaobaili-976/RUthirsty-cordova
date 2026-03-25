@@ -377,9 +377,9 @@ class _WAVPlayer:
 def _body_html(text: str) -> str:
     """Wrap plain text in body-style HTML: line-height 1.3, justified."""
     return (
-        '<p style="line-height:1.3; text-align:justify; margin:0;">'
+        '<div style="line-height:1.3; text-align:justify; margin:0; padding:0;">'
         + _html.escape(text).replace('\n', '<br>')
-        + '</p>'
+        + '</div>'
     )
 
 
@@ -1024,8 +1024,9 @@ class MainWindow(QMainWindow):
             "background:#F8F8F8; border:none; color:#333;"
         )
         self._rev_ans_te.document().contentsChanged.connect(
-            self._adjust_rev_ans_height
+            lambda: QTimer.singleShot(0, self._adjust_rev_ans_height)
         )
+        self._rev_ans_te.document().setDocumentMargin(0)
         raf.addWidget(self._rev_ans_te)
         self._rev_ans_frame.hide()
         c_lay.addWidget(self._rev_ans_frame)
@@ -2038,26 +2039,25 @@ class MainWindow(QMainWindow):
 
     def _adjust_rev_ans_height(self):
         """Auto-resize _rev_ans_te to fit its document content exactly."""
-        doc = self._rev_ans_te.document()
-        doc.adjustSize()
-        h = int(doc.size().height()) + self._rev_ans_te.frameWidth() * 2 + 8
-        self._rev_ans_te.setFixedHeight(max(40, h))
+        te = self._rev_ans_te
+        h = int(te.document().size().height()) + te.frameWidth() * 2 + 4
+        te.setFixedHeight(max(36, h))
 
     def _set_rev_answer_html(self, raw: str):
         """Render answer text into the review answer QTextEdit."""
         if raw:
             escaped = _html.escape(raw).replace("\n", "<br>")
             html_body = (
-                f'<p style="'
+                f'<div style="'
                 f'font-family: Calibri, Georgia, Arial, sans-serif;'
-                f'font-size: 16pt; color: #333333; line-height: 130%; text-align:justify; margin:0;">'
-                f'{escaped}</p>'
+                f'font-size: 16pt; color: #333333; line-height: 130%; text-align:justify; margin:0; padding:0;">'
+                f'{escaped}</div>'
             )
         else:
             html_body = (
-                '<p style="font-family:Calibri,Arial,sans-serif;'
-                'font-size:16pt;color:#888;font-style:italic;line-height:130%;text-align:justify;margin:0;">'
-                '（本题暂无参考答案）</p>'
+                '<div style="font-family:Calibri,Arial,sans-serif;'
+                'font-size:16pt;color:#888;font-style:italic;line-height:130%;text-align:justify;margin:0;padding:0;">'
+                '（本题暂无参考答案）</div>'
             )
         self._rev_ans_te.setHtml(html_body)
 
