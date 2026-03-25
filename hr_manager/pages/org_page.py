@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QPointF
 from PyQt6.QtGui import (
-    QColor, QBrush, QPen, QFont, QTransform, QWheelEvent, QAction
+    QColor, QBrush, QPen, QFont, QTransform, QWheelEvent, QAction, QPainter
 )
 
 from styles import (
@@ -58,7 +58,6 @@ class DeptNode(QGraphicsRectItem):
         menu.addAction("新增小组", lambda: self._scene_owner.request_add_group(self._id, self._name))
         menu.addAction("编辑部门", lambda: self._scene_owner.request_edit_dept(self._id, self._name))
         act_del = menu.addAction("删除部门", lambda: self._scene_owner.request_delete_dept(self._id, self._name))
-        act_del.setForeground(QColor(_RED))
         menu.exec(event.screenPos())
 
 
@@ -87,7 +86,6 @@ class GroupNode(QGraphicsRectItem):
         menu = QMenu()
         menu.addAction("编辑小组", lambda: self._scene_owner.request_edit_group(self._id, self._name))
         act_del = menu.addAction("删除小组", lambda: self._scene_owner.request_delete_group(self._id, self._name))
-        act_del.setForeground(QColor(_RED))
         menu.exec(event.screenPos())
 
 
@@ -208,9 +206,8 @@ class OrgChartView(QGraphicsView):
     def __init__(self, scene: OrgScene, parent=None):
         super().__init__(scene, parent)
         self.setRenderHints(
-            self.renderHints() |
-            self.renderHints().__class__.Antialiasing |
-            self.renderHints().__class__.SmoothPixmapTransform
+            QPainter.RenderHint.Antialiasing |
+            QPainter.RenderHint.SmoothPixmapTransform
         )
         self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
