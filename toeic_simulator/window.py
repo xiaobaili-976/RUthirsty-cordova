@@ -936,7 +936,11 @@ class MainWindow(QMainWindow):
 
         # Content stack: 0=text, 1=image
         self._rev_content_stack = QStackedWidget()
-        c_lay.addWidget(self._rev_content_stack, 1)
+        self._rev_content_stack.setMinimumHeight(100)
+        self._rev_content_stack.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
+        c_lay.addWidget(self._rev_content_stack)
 
         # text page
         rtp   = QWidget()
@@ -949,7 +953,7 @@ class MainWindow(QMainWindow):
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
         self._rev_text_lbl.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
         )
         rsc = QScrollArea()
         rsc.setWidget(self._rev_text_lbl)
@@ -1005,14 +1009,21 @@ class MainWindow(QMainWindow):
         raf.addWidget(ans_title)
         self._rev_ans_te = QTextEdit()
         self._rev_ans_te.setReadOnly(True)
-        self._rev_ans_te.setMinimumHeight(96)
-        self._rev_ans_te.setMaximumHeight(190)
+        self._rev_ans_te.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self._rev_ans_te.setStyleSheet(
             "background:#F8F8F8; border:none; color:#333;"
+        )
+        self._rev_ans_te.document().contentsChanged.connect(
+            self._adjust_rev_ans_height
         )
         raf.addWidget(self._rev_ans_te)
         self._rev_ans_frame.hide()
         c_lay.addWidget(self._rev_ans_frame)
+
+        # Stretch at bottom — keeps all frames hugging the content above
+        c_lay.addStretch(1)
 
         lay.addWidget(content_area, 1)
 
@@ -2017,6 +2028,13 @@ class MainWindow(QMainWindow):
         # Reset recording state for this question
         self._rev_score_btn.setEnabled(bool(self._rev_last_wav))
 
+    def _adjust_rev_ans_height(self):
+        """Auto-resize _rev_ans_te to fit its document content exactly."""
+        doc = self._rev_ans_te.document()
+        doc.adjustSize()
+        h = int(doc.size().height()) + self._rev_ans_te.frameWidth() * 2 + 8
+        self._rev_ans_te.setFixedHeight(max(40, h))
+
     def _set_rev_answer_html(self, raw: str):
         """Render answer text into the review answer QTextEdit."""
         if raw:
@@ -2024,7 +2042,7 @@ class MainWindow(QMainWindow):
             html_body = (
                 f'<p style="'
                 f'font-family: Calibri, Georgia, Arial, sans-serif;'
-                f'font-size: 16pt; color: #333333; line-height: 1.5; margin:0;">'
+                f'font-size: 16pt; color: #333333; line-height: 1.7; margin:0;">'
                 f'{escaped}</p>'
             )
         else:
