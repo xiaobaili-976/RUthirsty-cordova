@@ -89,6 +89,16 @@ toeic_simulator/**/*.pyc
 toeic_simulator/*.pyc
 toeic_simulator/.buildtrigger
 
+# Local build output (hr_manager)
+hr_manager/Release/
+hr_manager/build/
+hr_manager/__pycache__/
+hr_manager/**/__pycache__/
+hr_manager/**/*.pyc
+hr_manager/*.pyc
+# IMPORTANT: never commit the encryption key — back it up separately
+hr_manager/data/hr_crypto.key
+
 # Local build output (zhizhi_music)
 zhizhi_music/.gradle/
 zhizhi_music/build/

@@ -1,0 +1,68 @@
+name: Build HR Manager EXE
+
+on:
+  push:
+    paths:
+      - 'hr_manager/**'
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: hr_manager
+        run: pip install -r requirements.txt
+
+      - name: Build EXE
+        working-directory: hr_manager
+        run: pyinstaller hr_manager.spec --clean --noconfirm --distpath Release
+
+      - name: Get version tag
+        id: version
+        shell: bash
+        run: |
+          COUNT=$(git rev-list --count HEAD -- hr_manager/)
+          echo "tag=v1.0.${COUNT}" >> $GITHUB_OUTPUT
+          echo "name=HR Manager v1.0.${COUNT}" >> $GITHUB_OUTPUT
+
+      - name: Package release
+        shell: pwsh
+        run: |
+          $dest = "hr_manager\Release\HR_Manager_${{ steps.version.outputs.tag }}.zip"
+          Compress-Archive -Path "hr_manager\Release\HR_Manager.exe" -DestinationPath $dest
+          echo "zip_path=$dest" >> $env:GITHUB_OUTPUT
+        id: package
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: hr-${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.name }}
+          body: |
+            ## HR Manager ${{ steps.version.outputs.tag }}
+
+            人员信息与组织架构可视化管理系统 — Windows 单机版
+
+            ### 安装说明
+            1. 下载并解压 ZIP 文件
+            2. 双击 `HR_Manager.exe` 运行
+            3. 默认账号：`admin` / 密码：`admin123`
+            4. 数据自动保存在 EXE 同级 `data/` 目录
+
+            > ⚠️ 请妥善备份 `data/` 目录（含数据库和加密密钥）
+          files: hr_manager/Release/HR_Manager_${{ steps.version.outputs.tag }}.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
