@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'hr_manager/**'
+      - '.github/workflows/build-hr.yml'
     branches: [main]
   workflow_dispatch:
 
