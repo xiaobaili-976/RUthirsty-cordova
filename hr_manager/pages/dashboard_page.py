@@ -14,8 +14,8 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
     QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsEllipseItem,
     QGraphicsLineItem, QGraphicsTextItem, QGraphicsItem,
-    QMenu, QInputDialog, QMessageBox, QFrame, QScrollArea,
-    QSizePolicy, QGraphicsDropShadowEffect, QSplitter,
+    QMenu, QInputDialog, QMessageBox,
+    QSizePolicy, QGraphicsDropShadowEffect,
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QRectF, QPointF, QEvent
 from PyQt6.QtGui import (
@@ -96,172 +96,6 @@ def _draw_group_to_members(scene, grp_cx, grp_bot_y, mbr_top_ys):
     for i in range(len(mbr_top_ys) - 1):
         mbr_bot_i = mbr_top_ys[i] + _MBR_H
         _add_line(scene, grp_cx, mbr_bot_i, grp_cx, mbr_top_ys[i + 1])
-
-
-# ── Right-side detail panel ────────────────────────────────────────────────────
-
-class _DetailPanel(QFrame):
-    """Employee detail panel on the right side of the splitter."""
-
-    closed = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("DetailPanel")
-        self.setStyleSheet("""
-            QFrame#DetailPanel {
-                background: white;
-                border-left: 1px solid #DDE3EE;
-            }
-        """)
-        self.setMinimumWidth(220)
-        self._build()
-        self.hide()
-
-    def _build(self):
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-
-        # ── Header ──
-        self._hdr = QWidget()
-        self._hdr.setStyleSheet("background:#003087;")
-        self._hdr.setFixedHeight(48)
-        hdr_lay = QHBoxLayout(self._hdr)
-        hdr_lay.setContentsMargins(16, 0, 12, 0)
-
-        self._hdr_name = QLabel()
-        self._hdr_name.setStyleSheet(
-            "color:white; font-size:15px; font-weight:bold; background:transparent;"
-        )
-        hdr_lay.addWidget(self._hdr_name)
-        hdr_lay.addStretch()
-
-        close_btn = QPushButton("✕")
-        close_btn.setStyleSheet(
-            "QPushButton { color: white; background: transparent; border: none;"
-            " font-size: 18px; font-weight: bold; }"
-            "QPushButton:hover { color: #FFD700; }"
-        )
-        close_btn.setFixedSize(28, 28)
-        close_btn.clicked.connect(self._close)
-        hdr_lay.addWidget(close_btn)
-        lay.addWidget(self._hdr)
-
-        # ── Type badge ──
-        self._type_badge = QLabel()
-        self._type_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._type_badge.setFixedHeight(28)
-        lay.addWidget(self._type_badge)
-
-        # ── Scrollable info area ──
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; }")
-        content = QWidget()
-        content.setStyleSheet("background:white;")
-        scroll.setWidget(content)
-        lay.addWidget(scroll, 1)
-
-        self._info_lay = QVBoxLayout(content)
-        self._info_lay.setContentsMargins(16, 10, 16, 16)
-        self._info_lay.setSpacing(4)
-
-    # ── Content helpers ──
-
-    def _clear(self):
-        while self._info_lay.count():
-            item = self._info_lay.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-    def _section(self, title: str):
-        lbl = QLabel(title)
-        lbl.setStyleSheet(
-            "color:#003087; font-size:12px; font-weight:bold;"
-            " border-bottom:1px solid #DDE3EE; padding-bottom:3px; margin-top:8px;"
-        )
-        self._info_lay.addWidget(lbl)
-
-    def _row(self, label: str, value: str, color: str = "#222222"):
-        if not value:
-            return
-        row = QWidget()
-        rl = QHBoxLayout(row)
-        rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(8)
-        lbl = QLabel(label)
-        lbl.setStyleSheet("color:#86909C; font-size:12px; min-width:72px;")
-        lbl.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        val = QLabel(value)
-        val.setStyleSheet(f"color:{color}; font-size:12px;")
-        val.setWordWrap(True)
-        rl.addWidget(lbl)
-        rl.addWidget(val, 1)
-        self._info_lay.addWidget(row)
-
-    # ── Public API ──
-
-    def load(self, emp, dept_name: str, group_name: str,
-             contract=None, stability=None):
-        self._clear()
-
-        self._hdr_name.setText(emp.name)
-        etype = emp.employee_type or ""
-        bg     = EMP_TYPE_BG.get(etype, "#F5F7FA")
-        border = EMP_TYPE_BORDER.get(etype, "#AAB4C8")
-        self._type_badge.setText(etype if etype else "未设置类型")
-        self._type_badge.setStyleSheet(
-            f"background:{bg}; color:{border}; font-size:12px; font-weight:bold;"
-            f" border-top:1px solid {border}; border-bottom:1px solid {border};"
-        )
-
-        self._section("基本信息")
-        self._row("工号",  emp.employee_id)
-        self._row("姓名",  emp.name)
-        self._row("性别",  emp.gender)
-        age = emp.age
-        self._row("年龄",  f"{age}岁" if age else "")
-        self._row("手机",  emp.phone)
-        self._row("邮箱",  emp.email)
-        self._row("状态",  emp.display_status)
-
-        self._section("岗位信息")
-        self._row("部门",  dept_name)
-        self._row("小组",  group_name)
-        self._row("职位",  emp.job_title)
-        self._row("职级",  emp.job_level)
-        self._row("职等",  emp.job_grade)
-
-        if contract:
-            self._section("合同信息")
-            self._row("合同类型", contract.contract_type)
-            self._row("入职日期", contract.hire_date)
-            tenure = contract.tenure_months
-            self._row("在职时长", f"{tenure}个月" if tenure else "")
-            d2e = contract.days_to_end
-            if d2e is not None:
-                if d2e <= 90:   clr = "#C0392B"
-                elif d2e <= 180: clr = "#E67E22"
-                elif d2e <= 270: clr = "#F39C12"
-                else:           clr = "#222222"
-                self._row("合同到期", f"{d2e}天后", color=clr)
-
-        if stability:
-            self._section("稳定性评估")
-            risk_map = {"green": "稳定", "yellow": "需关注", "red": "高风险"}
-            risk_clr = {"green": "#27AE60", "yellow": "#F39C12", "red": "#C0392B"}
-            r = stability.risk_level
-            self._row("风险等级", risk_map.get(r, r), color=risk_clr.get(r, "#222"))
-            if stability.risk_tags:
-                self._row("风险标签", stability.risk_tags.replace(",", "  "))
-
-        self._info_lay.addStretch()
-        self.show()
-
-    def _close(self):
-        self.hide()
-        self.closed.emit()
 
 
 # ── Member node (card style, single-column) ───────────────────────────────────
@@ -690,24 +524,9 @@ class DashboardPage(QWidget):
         hint.setStyleSheet("color:#86909C; font-size:11px;")
         lay.addWidget(hint)
 
-        # ── Splitter: chart | detail panel ──
-        self._splitter = QSplitter(Qt.Orientation.Horizontal)
-        self._splitter.setHandleWidth(1)
-        self._splitter.setStyleSheet(
-            "QSplitter::handle { background:#DDE3EE; }"
-        )
-
+        # ── Chart view ──
         self._view = OrgChartView(self._scene)
-        self._splitter.addWidget(self._view)
-
-        self._detail_panel = _DetailPanel()
-        self._detail_panel.closed.connect(self._on_panel_closed)
-        self._splitter.addWidget(self._detail_panel)
-
-        self._splitter.setStretchFactor(0, 1)
-        self._splitter.setStretchFactor(1, 0)
-
-        lay.addWidget(self._splitter, 1)
+        lay.addWidget(self._view, 1)
 
         self._load_tree()
 
@@ -861,41 +680,7 @@ class DashboardPage(QWidget):
                 self._view.centerOn(node)
 
     def _on_member_clicked(self, employee_id: str):
-        emp_mgr  = self._mgr.get("employee")
-        cont_mgr = self._mgr.get("contract")
-        stab_mgr = self._mgr.get("stability")
-        if not emp_mgr:
-            return
-        emp = emp_mgr.get_employee(employee_id)
-        if not emp:
-            return
-
-        dept_name, group_name = "", ""
-        if emp.dept_id:
-            for d in emp_mgr.list_departments():
-                if d["dept_id"] == emp.dept_id:
-                    dept_name = d["dept_name"]; break
-        if emp.group_id:
-            for g in emp_mgr.list_groups():
-                if g["group_id"] == emp.group_id:
-                    group_name = g["group_name"]; break
-
-        contract  = cont_mgr.get_active_contract(employee_id) if cont_mgr else None
-        stability = stab_mgr.get_latest(employee_id)          if stab_mgr else None
-
-        self._detail_panel.load(emp, dept_name, group_name, contract, stability)
-
-        # Open detail panel if collapsed
-        sizes = self._splitter.sizes()
-        if sizes[1] < 50:
-            total = sizes[0] + sizes[1]
-            self._splitter.setSizes([max(400, total - 300), 300])
-
         self.employee_selected.emit(employee_id)
-
-    def _on_panel_closed(self):
-        total = sum(self._splitter.sizes())
-        self._splitter.setSizes([total, 0])
 
     def _reset_view(self):
         self._view.resetTransform()
