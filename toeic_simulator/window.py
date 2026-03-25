@@ -375,11 +375,11 @@ class _WAVPlayer:
 
 
 def _body_html(text: str) -> str:
-    """Wrap plain text in body-style HTML with line-height 1.3."""
+    """Wrap plain text in body-style HTML: line-height 1.3, justified."""
     return (
-        '<span style="line-height:1.3;">'
+        '<p style="line-height:1.3; text-align:justify; margin:0;">'
         + _html.escape(text).replace('\n', '<br>')
-        + '</span>'
+        + '</p>'
     )
 
 
@@ -1839,9 +1839,9 @@ class MainWindow(QMainWindow):
                 f'font-family: Calibri, Georgia, Arial, sans-serif;'
                 f'font-size: 14pt;'
                 f'color: #333333;'
-                f'line-height: 1.3;'
+                f'line-height: 130%;'
                 f'margin: 0;'
-                f'text-align: left;'
+                f'text-align: justify;'
                 f'">{escaped}</p>'
             )
         else:
@@ -1849,7 +1849,7 @@ class MainWindow(QMainWindow):
                 '<p style="'
                 'font-family: Calibri, Georgia, Arial, sans-serif;'
                 'font-size: 14pt; color: #888888; font-style: italic; '
-                'line-height: 1.3; margin: 0;">'
+                'line-height: 130%; margin: 0; text-align:justify;">'
                 '（本题暂无参考答案）</p>'
             )
         te.setHtml(html_body)
@@ -2050,13 +2050,13 @@ class MainWindow(QMainWindow):
             html_body = (
                 f'<p style="'
                 f'font-family: Calibri, Georgia, Arial, sans-serif;'
-                f'font-size: 16pt; color: #333333; line-height: 1.3; margin:0;">'
+                f'font-size: 16pt; color: #333333; line-height: 130%; text-align:justify; margin:0;">'
                 f'{escaped}</p>'
             )
         else:
             html_body = (
                 '<p style="font-family:Calibri,Arial,sans-serif;'
-                'font-size:16pt;color:#888;font-style:italic;line-height:1.3;margin:0;">'
+                'font-size:16pt;color:#888;font-style:italic;line-height:130%;text-align:justify;margin:0;">'
                 '（本题暂无参考答案）</p>'
             )
         self._rev_ans_te.setHtml(html_body)
@@ -2215,7 +2215,7 @@ class MainWindow(QMainWindow):
         auto-closes.  User can also manually cancel at any time.
         """
         _MAX_SCORE_RETRIES = 5
-        _SCORE_TIMEOUT_SEC = 5   # matches VoiceScorer 5-second timeout
+        _SCORE_TIMEOUT_SEC = 15   # matches VoiceScorer 15-second timeout
 
         # Stop any running TTS so the dialog is the only thing happening
         try:

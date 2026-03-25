@@ -221,10 +221,10 @@ class VoiceScorer:
             on_close=on_close,
         )
         t = threading.Thread(
-            target=ws.run_forever, kwargs={"ping_timeout": 5}, daemon=True
+            target=ws.run_forever, daemon=True
         )
         t.start()
-        done_evt.wait(timeout=5)
+        done_evt.wait(timeout=15)
 
         if not done_evt.is_set():
             try:

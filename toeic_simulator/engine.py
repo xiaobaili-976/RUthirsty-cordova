@@ -436,16 +436,29 @@ class ExamEngine(QObject):
         self.update_timer.emit(-1, "")
 
     def pause_timer(self) -> None:
-        """Pause the active countdown without advancing (e.g. scoring dialog open)."""
-        if self._countdown.isActive():
+        """Pause the active countdown or note that a TTS step was interrupted."""
+        self._timer_paused    = True
+        self._paused_in_timer = self._countdown.isActive()
+        if self._paused_in_timer:
             self._countdown.stop()
-            self._timer_paused = True
 
     def resume_timer(self) -> None:
-        """Resume a previously paused countdown timer."""
-        if getattr(self, '_timer_paused', False) and self._remaining > 0:
-            self._timer_paused = False
+        """
+        Resume after a pause_timer() call.
+        • Timer phase was paused  → restart countdown from remaining time.
+        • TTS phase was interrupted → advance past the stuck TTS step.
+        """
+        if not getattr(self, '_timer_paused', False):
+            return
+        was_timer = getattr(self, '_paused_in_timer', False)
+        self._timer_paused    = False
+        self._paused_in_timer = False
+        if was_timer and self._remaining > 0:
             self._countdown.start()
+        elif not was_timer and self._steps and self._idx < len(self._steps):
+            # TTS was interrupted — guard against double-advance then skip ahead
+            self._tts_skipped = True
+            QTimer.singleShot(50, self._advance)
 
     # ── private ───────────────────────────────────────────────────────────────
     def _load_bank(self) -> None:
