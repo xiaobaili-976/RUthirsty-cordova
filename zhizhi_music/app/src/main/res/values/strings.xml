@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">知知小音乐</string>
+    <string name="nav_home">首页</string>
+    <string name="nav_knowledge">基础知识</string>
+    <string name="nav_ukulele">尤克里里</string>
+    <string name="nav_singing">唱歌助手</string>
+    <string name="nav_library">曲库中心</string>
+    <string name="record_start">开始录音</string>
+    <string name="record_stop">停止录音</string>
+    <string name="analyzing">AI正在分析，请稍等...</string>
+    <string name="permission_audio">需要麦克风权限才能录音</string>
+    <string name="export_pdf">导出曲谱PDF</string>
+    <string name="share_score">分享成绩</string>
+    <string name="check_in">今日打卡</string>
+    <string name="check_in_done">今日已打卡 ✓</string>
+    <string name="practice_plan">今日练习计划</string>
+    <string name="score_label">综合得分</string>
+    <string name="pitch_score">音准</string>
+    <string name="chord_score">和弦</string>
+    <string name="rhythm_score">节奏</string>
+    <string name="encourage_excellent">太棒了！你是小小音乐家！</string>
+    <string name="encourage_good">弹得不错！继续加油！</string>
+    <string name="encourage_ok">有进步！多练几遍更完美！</string>
+    <string name="encourage_try">加油！每次练习都在进步！</string>
+    <string name="locked_tip">完成前面的曲目才能解锁这首哦！</string>
+    <string name="metronome_on">开启节拍器</string>
+    <string name="metronome_off">关闭节拍器</string>
+</resources>

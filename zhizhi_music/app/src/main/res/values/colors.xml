@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Sky Blue -->
+    <color name="md_theme_primary">#1E88E5</color>
+    <color name="md_theme_onPrimary">#FFFFFF</color>
+    <color name="md_theme_primaryContainer">#E3F2FD</color>
+    <color name="md_theme_onPrimaryContainer">#0D47A1</color>
+
+    <!-- Secondary Warm Orange -->
+    <color name="md_theme_secondary">#FF8F00</color>
+    <color name="md_theme_onSecondary">#FFFFFF</color>
+    <color name="md_theme_secondaryContainer">#FFF8E1</color>
+    <color name="md_theme_onSecondaryContainer">#E65100</color>
+
+    <!-- Tertiary Soft Green -->
+    <color name="md_theme_tertiary">#43A047</color>
+    <color name="md_theme_onTertiary">#FFFFFF</color>
+    <color name="md_theme_tertiaryContainer">#E8F5E9</color>
+    <color name="md_theme_onTertiaryContainer">#1B5E20</color>
+
+    <!-- Surface / Background (eye-care warm white) -->
+    <color name="md_theme_background">#FAFAF8</color>
+    <color name="md_theme_onBackground">#1A1A1A</color>
+    <color name="md_theme_surface">#FFFFFF</color>
+    <color name="md_theme_onSurface">#1A1A1A</color>
+    <color name="md_theme_surfaceVariant">#F5F5F0</color>
+    <color name="md_theme_onSurfaceVariant">#555555</color>
+    <color name="md_theme_outline">#D0D0C8</color>
+
+    <!-- Error -->
+    <color name="md_theme_error">#B71C1C</color>
+    <color name="md_theme_onError">#FFFFFF</color>
+
+    <!-- Eye-care mode -->
+    <color name="eye_care_background">#FFF9F0</color>
+    <color name="eye_care_surface">#FFFDF8</color>
+
+    <!-- Score colors -->
+    <color name="score_excellent">#1B5E20</color>
+    <color name="score_good">#1976D2</color>
+    <color name="score_average">#F57F17</color>
+    <color name="score_poor">#C62828</color>
+
+    <!-- UI specific -->
+    <color name="card_plan_bg">#EBF5FB</color>
+    <color name="card_result_bg">#F0F8FF</color>
+    <color name="waveform_bg">#1A1E88E5</color>
+    <color name="pitch_line_bg">#0D43A047</color>
+    <color name="streak_color">#E65100</color>
+
+    <!-- Level badge colors -->
+    <color name="level_entry">#43A047</color>
+    <color name="level_medium">#1E88E5</color>
+    <color name="level_advanced">#8E24AA</color>
+
+    <!-- Chip colors -->
+    <color name="chip_error_bg">#FFCDD2</color>
+    <color name="chip_warn_bg">#FFF9C4</color>
+
+    <!-- Dark theme overrides -->
+    <color name="md_theme_dark_primary">#90CAF9</color>
+    <color name="md_theme_dark_background">#1A1A1A</color>
+    <color name="md_theme_dark_surface">#242424</color>
+    <color name="md_theme_dark_onSurface">#EEEEEE</color>
+</resources>

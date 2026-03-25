@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp"
+    android:layout_margin="4dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Lock Icon -->
+            <ImageView
+                android:id="@+id/ivLock"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:src="@drawable/ic_lock"
+                android:layout_marginEnd="6dp"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="歌曲名称"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="?attr/colorOnSurface" />
+
+                <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:id="@+id/tvLevel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="入门" android:textSize="11sp" android:paddingStart="6dp" android:paddingEnd="6dp" android:paddingTop="2dp" android:paddingBottom="2dp" android:layout_marginEnd="6dp" android:background="@drawable/bg_level_badge" />
+                    <RatingBar android:id="@+id/ratingDifficulty" style="@style/Widget.AppCompat.RatingBar.Small" android:layout_width="wrap_content" android:layout_height="wrap_content" android:numStars="5" android:stepSize="1" android:isIndicator="true" android:rating="2" />
+                </LinearLayout>
+
+                <TextView android:id="@+id/tvChords" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="和弦" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" android:gravity="center">
+                <TextView android:id="@+id/tvBestScore" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="未练习" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" android:gravity="center" />
+                <TextView android:id="@+id/tvBpm" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="80 BPM" android:textSize="11sp" android:textColor="?attr/colorOnSurfaceVariant" android:gravity="center" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Locked overlay text -->
+        <TextView android:id="@+id/tvLocked" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="🔒 完成前面曲目解锁" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" android:visibility="gone" android:layout_marginTop="4dp" />
+
+        <!-- Action Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPlay"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="示范"
+                app:icon="@drawable/ic_play"
+                android:textSize="11sp"
+                android:layout_marginEnd="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnPractice"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="练习"
+                app:icon="@drawable/ic_ukulele"
+                android:textSize="11sp"
+                android:layout_marginEnd="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnExport"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp"
+                android:layout_height="36dp"
+                android:layout_weight="1"
+                android:text="曲谱"
+                app:icon="@drawable/ic_pdf"
+                android:textSize="11sp"
+                android:layout_marginEnd="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnFavorite"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                app:icon="@drawable/ic_favorite" />
+        </LinearLayout>
+
+    </LinearLayout>
+</com.google.android.material.card.MaterialCardView>

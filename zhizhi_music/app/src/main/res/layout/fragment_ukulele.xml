@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="?attr/colorBackground">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="尤克里里助手"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"
+            android:textColor="?attr/colorOnSurface" />
+
+        <!-- Record Controls -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            android:layout_marginBottom="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+
+                <TextView android:id="@+id/tvRecordHint" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="点击录音开始分析" android:textSize="14sp" android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginBottom="12dp" />
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginBottom="12dp">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRecord"
+                        style="@style/Widget.Material3.Button"
+                        android:layout_width="0dp"
+                        android:layout_height="56dp"
+                        android:layout_weight="1"
+                        android:text="开始录音"
+                        app:icon="@drawable/ic_mic"
+                        android:textSize="15sp"
+                        android:layout_marginEnd="12dp" />
+                    <TextView android:id="@+id/tvRecordTime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="00:00" android:textSize="24sp" android:textStyle="bold" android:textColor="?attr/colorPrimary" android:fontFamily="monospace" />
+                </LinearLayout>
+
+                <!-- Amplitude bar -->
+                <ProgressBar
+                    android:id="@+id/progressAmplitude"
+                    style="@style/Widget.AppCompat.ProgressBar.Horizontal"
+                    android:layout_width="match_parent"
+                    android:layout_height="8dp"
+                    android:progress="0"
+                    android:max="100"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- Waveform placeholder -->
+                <View
+                    android:id="@+id/waveformView"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:background="@color/waveform_bg"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Metronome Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="12dp"
+            android:layout_marginBottom="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="12dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="节拍器" android:textSize="14sp" android:textStyle="bold" android:layout_marginBottom="8dp" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnBpmMinus"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="40dp" android:layout_height="40dp"
+                        app:icon="@drawable/ic_remove" />
+                    <TextView android:id="@+id/tvBpm" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="80 BPM" android:textSize="18sp" android:textStyle="bold" android:gravity="center" android:textColor="?attr/colorPrimary" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnBpmPlus"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="40dp" android:layout_height="40dp"
+                        app:icon="@drawable/ic_add" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMetronome"
+                        style="@style/Widget.Material3.Button.TonalButton"
+                        android:layout_width="wrap_content" android:layout_height="40dp"
+                        android:text="开启节拍器" android:textSize="12sp" android:layout_marginStart="8dp" />
+                </LinearLayout>
+                <View android:id="@+id/viewMetronomeFlash" android:layout_width="match_parent" android:layout_height="4dp" android:background="?attr/colorPrimary" android:visibility="invisible" android:layout_marginTop="8dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Analyzing Indicator -->
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progressAnalyzing"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:indeterminate="true"
+            android:visibility="gone"
+            android:layout_marginBottom="4dp" />
+        <TextView android:id="@+id/tvAnalyzingHint" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="AI正在分析，请稍等..." android:textSize="13sp" android:textColor="?attr/colorPrimary" android:visibility="gone" android:layout_marginBottom="12dp" />
+
+        <!-- Result Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="4dp"
+            app:cardBackgroundColor="@color/card_result_bg"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center" android:layout_marginBottom="12dp">
+                    <TextView android:id="@+id/tvOverallScore" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textSize="64sp" android:textStyle="bold" android:textColor="?attr/colorPrimary" />
+                    <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginStart="8dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="综合\n得分" android:textSize="14sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Three-dim scores -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="12dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="音准" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                        <TextView android:id="@+id/tvPitchScore" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textSize="20sp" android:textStyle="bold" android:textColor="?attr/colorPrimary" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="和弦" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                        <TextView android:id="@+id/tvChordScore" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textSize="20sp" android:textStyle="bold" android:textColor="?attr/colorTertiary" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical" android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="节奏" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" />
+                        <TextView android:id="@+id/tvRhythmScore" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textSize="20sp" android:textStyle="bold" android:textColor="@color/score_good" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Error Chips -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="8dp">
+                    <com.google.android.material.chip.Chip android:id="@+id/chipMuffled" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="闷音" android:visibility="gone" app:chipBackgroundColor="@color/chip_error_bg" android:layout_marginEnd="6dp" />
+                    <com.google.android.material.chip.Chip android:id="@+id/chipWeak" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="力道不足" android:visibility="gone" app:chipBackgroundColor="@color/chip_warn_bg" android:layout_marginEnd="6dp" />
+                    <com.google.android.material.chip.Chip android:id="@+id/chipSwitchDelay" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="换和弦慢" android:visibility="gone" app:chipBackgroundColor="@color/chip_warn_bg" />
+                </LinearLayout>
+
+                <TextView android:id="@+id/tvDetectedChords" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textSize="12sp" android:textColor="?attr/colorOnSurfaceVariant" android:layout_marginBottom="8dp" />
+
+                <!-- Feedback -->
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                    <TextView android:id="@+id/tvFeedback" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:textSize="13sp" android:lineSpacingMultiplier="1.5" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnReadFeedback"
+                        style="@style/Widget.Material3.Button.IconButton"
+                        android:layout_width="40dp" android:layout_height="40dp"
+                        app:icon="@drawable/ic_volume_up" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Action Buttons -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginBottom="24dp">
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnShowChordTrainer"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
+                android:text="和弦训练器" android:textSize="12sp"
+                app:icon="@drawable/ic_ukulele" android:layout_marginEnd="6dp" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnExportPdf"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
+                android:text="导出曲谱" android:textSize="12sp"
+                app:icon="@drawable/ic_pdf" android:layout_marginEnd="6dp" />
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnShareScore"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1"
+                android:text="分享成绩" android:textSize="12sp"
+                app:icon="@drawable/ic_share" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
