@@ -16,9 +16,9 @@ from styles import (
     _BLUE, _LIGHT, _BORDER, _RED, _RED_LIGHT, _YELLOW, _GREEN,
     TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER
 )
-from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
+from pages.table_helpers import install_filter_header, show_col_customize_menu
 
-_COLS = ["工号", "姓名", "入职日期", "工作时长(月)", "合同次数", "续签日期", "续签倒计时"]
+_COLS = ["工号", "姓名", "入职日期", "入职时长(年)", "合同次数", "续签日期", "续签倒计时"]
 
 
 def _calc_renewal_info(hire_date_str: str):
@@ -35,11 +35,11 @@ def _calc_renewal_info(hire_date_str: str):
         return 0, ""
 
 
-def _months_between(d1: str, d2: str) -> str:
+def _years_since(hire_date_str: str) -> str:
     try:
-        a = date.fromisoformat(d1)
-        b = date.fromisoformat(d2)
-        return str((b.year - a.year) * 12 + (b.month - a.month))
+        hire = date.fromisoformat(hire_date_str)
+        years = (date.today() - hire).days / 365.25
+        return f"{years:.2f}"
     except Exception:
         return ""
 
@@ -104,9 +104,9 @@ class ContractPage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._table.verticalHeader().hide()
-        hdr = self._table.horizontalHeader()
-        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self._filter_hdr = install_filter_header(self._table, self)
+        self._filter_hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._filter_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.doubleClicked.connect(self._on_double_click)
         lay.addWidget(self._table, 1)
 
@@ -130,8 +130,6 @@ class ContractPage(QWidget):
         bot.addWidget(del_btn)
         lay.addLayout(bot)
 
-        init_col_filter(self)
-
     def refresh(self):
         self._load_table()
 
@@ -148,7 +146,7 @@ class ContractPage(QWidget):
             # Prefer stored renewal_date if contract already has one
             renewal_iso = c.renewal_date if c.renewal_date else renewal_date
             days = _days_to(renewal_iso)
-            duration = _months_between(c.hire_date, date.today().isoformat())
+            duration = _years_since(c.hire_date)
             countdown_text = f"{days} 天" if days is not None else "-"
 
             vals = [
@@ -175,7 +173,7 @@ class ContractPage(QWidget):
                     item.setBackground(bg)
                 self._table.setItem(row, col, item)
 
-        apply_col_filters(self)
+        self._filter_hdr.apply_filters(self)
 
     def _on_customize(self):
         show_col_customize_menu(self, self.sender(), _COLS)

@@ -16,7 +16,7 @@ from styles import (
     _YELLOW, TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER,
     RISK_COLOR, RISK_BG
 )
-from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
+from pages.table_helpers import install_filter_header, show_col_customize_menu
 
 _COLS = ["工号", "姓名", "评估日期", "家庭分", "职业分", "工作分", "综合评分", "风险等级", "风险标签"]
 
@@ -82,13 +82,11 @@ class StabilityPage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._table.verticalHeader().hide()
-        hdr = self._table.horizontalHeader()
-        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self._filter_hdr = install_filter_header(self._table, self)
+        self._filter_hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._filter_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.doubleClicked.connect(self._on_double_click)
         lay.addWidget(self._table, 1)
-
-        init_col_filter(self)
 
         # Bottom bar
         bot = QHBoxLayout()
@@ -178,8 +176,7 @@ class StabilityPage(QWidget):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self._table.setItem(row, col, item)
 
-        self._count_lbl.setText(f"共 {len(records)} 条")
-        apply_col_filters(self)
+        self._filter_hdr.apply_filters(self)
 
     def _on_customize(self):
         show_col_customize_menu(self, self.sender(), _COLS)

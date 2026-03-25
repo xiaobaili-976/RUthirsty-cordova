@@ -55,6 +55,14 @@ def _add_line(scene, x1, y1, x2, y2):
     scene.addItem(line)
 
 
+_TYPE_ORDER = {"华为": 0, "OD": 1, "外包": 2}
+
+
+def _member_sort_key(e):
+    is_pl = "PL" in (e.job_title or "").upper()
+    return (0 if is_pl else 1, _TYPE_ORDER.get(e.employee_type or "", 3), e.name or "")
+
+
 def _draw_dept_to_groups(scene, dept_cx, dept_bot_y, grp_centers_x):
     """Horizontal trunk at mid-point + vertical drops to each group."""
     if not grp_centers_x:
@@ -79,16 +87,15 @@ def _draw_dept_to_groups(scene, dept_cx, dept_bot_y, grp_centers_x):
 
 
 def _draw_group_to_members(scene, grp_cx, grp_bot_y, mbr_top_ys):
-    """Vertical trunk from group bottom through all member top-centers.
-    Small horizontal T-markers (±6px) drawn at each member junction."""
+    """Chain connections: group bottom → first member top, then member bottom → next member top."""
     if not mbr_top_ys:
         return
-    trunk_x = grp_cx
-    # Vertical trunk: group bottom → last member top center
-    _add_line(scene, trunk_x, grp_bot_y, trunk_x, mbr_top_ys[-1])
-    # T-marks at each junction
-    for top_y in mbr_top_ys:
-        _add_line(scene, trunk_x - 6, top_y, trunk_x + 6, top_y)
+    # Group bottom → first member top (center X aligned)
+    _add_line(scene, grp_cx, grp_bot_y, grp_cx, mbr_top_ys[0])
+    # Member[i] bottom → Member[i+1] top
+    for i in range(len(mbr_top_ys) - 1):
+        mbr_bot_i = mbr_top_ys[i] + _MBR_H
+        _add_line(scene, grp_cx, mbr_bot_i, grp_cx, mbr_top_ys[i + 1])
 
 
 # ── Right-side detail panel ────────────────────────────────────────────────────
@@ -786,6 +793,9 @@ class DashboardPage(QWidget):
                 self._scene._group_nodes.append(grp_node)
                 grp_centers_x.append(grp_cx_abs)
 
+                # Sort members: PL first, then 华为→OD→外包, then by name
+                members = sorted(members, key=_member_sort_key)
+
                 # Member nodes (single vertical column, centered under group)
                 mbr_top_ys = []
                 for idx, e in enumerate(members):
@@ -815,6 +825,7 @@ class DashboardPage(QWidget):
             # Direct members under dept (no group)
             direct = emps_by_dept.get(did, [])
             if direct:
+                direct = sorted(direct, key=_member_sort_key)
                 dm_x = dept_x
                 dm_top_ys = []
                 for idx, e in enumerate(direct):

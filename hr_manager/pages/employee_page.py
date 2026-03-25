@@ -7,8 +7,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 
+from datetime import date as _date
 from styles import _BLUE, _LIGHT, _BORDER, _RED, TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER, EMP_TYPE_BORDER
-from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
+from pages.table_helpers import install_filter_header, show_col_customize_menu
 
 
 _COLS = ["工号", "姓名", "性别", "年龄", "员工类型", "部门", "小组", "职位", "职级"]
@@ -57,9 +58,9 @@ class EmployeePage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._table.verticalHeader().hide()
-        hdr = self._table.horizontalHeader()
-        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self._filter_hdr = install_filter_header(self._table, self)
+        self._filter_hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._filter_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.doubleClicked.connect(self._on_double_click)
         lay.addWidget(self._table, 1)
 
@@ -89,8 +90,6 @@ class EmployeePage(QWidget):
         bot.addWidget(del_btn)
         lay.addLayout(bot)
 
-        init_col_filter(self)
-
     def refresh(self):
         self._load_table()
 
@@ -103,11 +102,12 @@ class EmployeePage(QWidget):
         depts  = {r["dept_id"]: r["dept_name"] for r in emp_mgr.list_departments()}
         groups = {r["group_id"]: r["group_name"] for r in emp_mgr.list_groups()}
 
+        today = _date.today()
         self._table.setRowCount(len(emps))
         for row, e in enumerate(emps):
             vals = [
                 e.employee_id, e.name, e.gender,
-                str(e.age) if e.age else "",
+                f"{(today - _date.fromisoformat(e.dob)).days / 365.25:.2f}" if e.dob else "",
                 e.employee_type or "",
                 depts.get(e.dept_id, ""),
                 groups.get(e.group_id, ""),
@@ -121,7 +121,7 @@ class EmployeePage(QWidget):
                     item.setForeground(QColor(EMP_TYPE_BORDER.get(val, "#AAB4C8")))
                 self._table.setItem(row, col, item)
 
-        apply_col_filters(self)
+        self._filter_hdr.apply_filters(self)
 
     def _on_customize(self):
         show_col_customize_menu(self, self.sender(), _COLS)

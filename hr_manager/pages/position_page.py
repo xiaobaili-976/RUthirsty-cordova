@@ -3,6 +3,8 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from datetime import date
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
@@ -15,9 +17,9 @@ from styles import (
     _BLUE, _LIGHT, _BORDER, _RED, _GREEN, _TEXT_SEC,
     TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER
 )
-from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
+from pages.table_helpers import install_filter_header, show_col_customize_menu
 
-_COLS = ["工号", "姓名", "职级", "职等", "调整类型", "调整间隔(天)", "调整情况"]
+_COLS = ["工号", "姓名", "职级", "职等", "调整类型", "调整间隔(月)", "调整情况"]
 
 _ADJ_COLORS = {
     "调级": _GREEN,
@@ -25,12 +27,11 @@ _ADJ_COLORS = {
 }
 
 
-def _days_interval(prev_date: str, cur_date: str) -> str:
-    from datetime import date
+def _months_interval(prev_date: str, cur_date: str) -> str:
     try:
         a = date.fromisoformat(prev_date)
         b = date.fromisoformat(cur_date)
-        return str((b - a).days)
+        return str((b.year - a.year) * 12 + (b.month - a.month))
     except Exception:
         return "-"
 
@@ -83,9 +84,9 @@ class PositionPage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._table.verticalHeader().hide()
-        hdr = self._table.horizontalHeader()
-        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self._filter_hdr = install_filter_header(self._table, self)
+        self._filter_hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._filter_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.doubleClicked.connect(self._on_double_click)
         lay.addWidget(self._table, 1)
 
@@ -108,8 +109,6 @@ class PositionPage(QWidget):
         del_btn.clicked.connect(self._on_delete)
         bot.addWidget(del_btn)
         lay.addLayout(bot)
-
-        init_col_filter(self)
 
     def refresh(self):
         self._load_table()
@@ -140,7 +139,7 @@ class PositionPage(QWidget):
         for r in sorted(records, key=lambda r: (r.employee_id, r.effective_date or "")):
             pid = r.employee_id
             if pid in prev_dates:
-                intervals[r.position_id] = _days_interval(prev_dates[pid], r.effective_date or "")
+                intervals[r.position_id] = _months_interval(prev_dates[pid], r.effective_date or "")
             else:
                 intervals[r.position_id] = "-"
             prev_dates[pid] = r.effective_date or ""
@@ -167,7 +166,7 @@ class PositionPage(QWidget):
                     item.setFont(f)
                 self._table.setItem(row, col, item)
 
-        apply_col_filters(self)
+        self._filter_hdr.apply_filters(self)
 
     def _on_customize(self):
         show_col_customize_menu(self, self.sender(), _COLS)

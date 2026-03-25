@@ -15,7 +15,7 @@ from styles import (
     _BLUE, _LIGHT, _BORDER, _RED, _GREEN, _YELLOW,
     TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER
 )
-from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
+from pages.table_helpers import install_filter_header, show_col_customize_menu
 
 _COLS = ["工号", "姓名", "基本工资", "绩效工资", "总工资", "CR", "规划调薪"]
 
@@ -75,9 +75,9 @@ class SalaryPage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._table.verticalHeader().hide()
-        hdr = self._table.horizontalHeader()
-        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self._filter_hdr = install_filter_header(self._table, self)
+        self._filter_hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._filter_hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.doubleClicked.connect(self._on_double_click)
         lay.addWidget(self._table, 1)
 
@@ -100,8 +100,6 @@ class SalaryPage(QWidget):
         del_btn.clicked.connect(self._on_delete)
         bot.addWidget(del_btn)
         lay.addLayout(bot)
-
-        init_col_filter(self)
 
     def refresh(self):
         self._load_table()
@@ -142,7 +140,7 @@ class SalaryPage(QWidget):
                 item.setData(Qt.ItemDataRole.UserRole, s.salary_id)
                 self._table.setItem(row, col, item)
 
-        apply_col_filters(self)
+        self._filter_hdr.apply_filters(self)
 
     def _on_customize(self):
         show_col_customize_menu(self, self.sender(), _COLS)

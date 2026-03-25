@@ -273,8 +273,8 @@ class EmployeeForm(QDialog):
     def _update_age(self):
         d = self._dob_edit.date()
         today = date.today()
-        age = today.year - d.year() - ((today.month, today.day) < (d.month(), d.day()))
-        self._age_lbl.setText(f"年龄: {age}")
+        age = (today - date(d.year(), d.month(), d.day())).days / 365.25
+        self._age_lbl.setText(f"年龄: {age:.2f}")
 
     def _populate(self):
         e = self._employee

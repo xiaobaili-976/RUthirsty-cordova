@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import date
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QLineEdit, QComboBox, QCompleter, QMessageBox, QWidget
+    QLineEdit, QComboBox, QCompleter, QDateEdit, QMessageBox, QWidget
 )
 from PyQt6.QtCore import Qt, QDate
 
@@ -75,13 +75,12 @@ class PositionForm(QDialog):
         self._adj_cb.addItems(["调级", "调等"])
         lay.addRow("调整类型", self._adj_cb)
 
-        # Read-only lookup fields
-        self._last_adj_lbl = QLabel("-")
-        self._last_adj_lbl.setStyleSheet(
-            f"color:{_TEXT_SEC}; padding:4px 8px; background:#f7f8fa; "
-            f"border:1px solid {_BORDER}; border-radius:4px;"
-        )
-        lay.addRow("最近一次调整日期", self._last_adj_lbl)
+        # Last adjustment lookup (auto-populated from DB, user-adjustable)
+        self._last_adj_date = QDateEdit()
+        self._last_adj_date.setCalendarPopup(True)
+        self._last_adj_date.setDate(QDate.currentDate())
+        self._last_adj_date.dateChanged.connect(self._update_interval)
+        lay.addRow("最近一次调整日期", self._last_adj_date)
 
         self._interval_lbl = QLabel("-")
         self._interval_lbl.setStyleSheet(
@@ -124,7 +123,9 @@ class PositionForm(QDialog):
     def _lookup_last_adjustment(self, eid: str):
         pos_mgr = self._mgr.get("position")
         if not pos_mgr or not eid:
-            self._last_adj_lbl.setText("-")
+            self._last_adj_date.blockSignals(True)
+            self._last_adj_date.setDate(QDate.currentDate())
+            self._last_adj_date.blockSignals(False)
             self._interval_lbl.setText("-")
             return
         history = pos_mgr.get_history(eid)
@@ -132,17 +133,28 @@ class PositionForm(QDialog):
         if self._editing and self._position:
             history = [p for p in history if p.position_id != self._position.position_id]
         if not history:
-            self._last_adj_lbl.setText("-")
+            self._last_adj_date.blockSignals(True)
+            self._last_adj_date.setDate(QDate.currentDate())
+            self._last_adj_date.blockSignals(False)
             self._interval_lbl.setText("-")
             return
         history.sort(key=lambda p: p.effective_date or "", reverse=True)
         latest = history[0]
         last_date = latest.effective_date or ""
-        self._last_adj_lbl.setText(last_date or "-")
         try:
             d = date.fromisoformat(last_date)
-            days = (date.today() - d).days
-            self._interval_lbl.setText(f"{days} 天")
+            self._last_adj_date.setDate(QDate(d.year, d.month, d.day))
+        except Exception:
+            self._last_adj_date.setDate(QDate.currentDate())
+        self._update_interval()
+
+    def _update_interval(self):
+        qd = self._last_adj_date.date()
+        try:
+            last = date(qd.year(), qd.month(), qd.day())
+            today = date.today()
+            months = (today.year - last.year) * 12 + (today.month - last.month)
+            self._interval_lbl.setText(f"{months} 个月")
         except Exception:
             self._interval_lbl.setText("-")
 

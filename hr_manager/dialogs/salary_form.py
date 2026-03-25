@@ -207,7 +207,7 @@ class SalaryForm(QDialog):
         self._total_lbl.setText(f"{total:,.2f}")
         band_mid = self._band_mid.value()
         if band_mid > 0:
-            cr = total / band_mid
+            cr = self._base_spin.value() / band_mid
             self._cr_lbl.setText(f"{cr:.0%}")
         else:
             self._cr_lbl.setText("-")
@@ -249,7 +249,7 @@ class SalaryForm(QDialog):
 
         total = self._base_spin.value() + self._perf_spin.value()
         band_mid = self._band_mid.value()
-        cr = total / band_mid if band_mid > 0 else 0.0
+        cr = self._base_spin.value() / band_mid if band_mid > 0 else 0.0
         planned_date = (
             f"{self._planned_year.value():04d}-"
             f"{self._planned_month.currentText()}-01"
