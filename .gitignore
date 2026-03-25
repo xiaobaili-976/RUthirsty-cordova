@@ -77,3 +77,11 @@ live-server.log
 
 # Gradle properties (may contain sensitive info)
 gradle.properties
+
+# Local build output
+toeic_simulator/dist/
+toeic_simulator/build/
+toeic_simulator/Release/
+toeic_simulator/__pycache__/
+toeic_simulator/*.pyc
+toeic_simulator/.buildtrigger
