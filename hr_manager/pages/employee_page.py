@@ -7,10 +7,10 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 
-from styles import _BLUE, _LIGHT, _BORDER, _RED, TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER
+from styles import _BLUE, _LIGHT, _BORDER, _RED, TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER, EMP_TYPE_BORDER
 
 
-_COLS = ["工号", "姓名", "性别", "年龄", "部门", "小组", "职位", "职级", "状态"]
+_COLS = ["工号", "姓名", "性别", "年龄", "员工类型", "部门", "小组", "职位", "职级", "状态"]
 
 
 class EmployeePage(QWidget):
@@ -123,6 +123,7 @@ class EmployeePage(QWidget):
             vals = [
                 e.employee_id, e.name, e.gender,
                 str(e.age) if e.age else "",
+                e.employee_type or "",
                 depts.get(e.dept_id, ""),
                 groups.get(e.group_id, ""),
                 e.job_title, e.job_level, e.display_status,
@@ -134,6 +135,9 @@ class EmployeePage(QWidget):
                     item.setForeground(QColor("#aaa"))
                 elif e.status == "probation":
                     item.setForeground(QColor("#E67E22"))
+                # Color employee_type column
+                elif col == 4 and val:
+                    item.setForeground(QColor(EMP_TYPE_BORDER.get(val, "#AAB4C8")))
                 self._table.setItem(row, col, item)
 
         self._count_lbl.setText(f"共 {len(emps)} 条")

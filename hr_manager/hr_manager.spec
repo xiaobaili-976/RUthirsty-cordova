@@ -26,7 +26,7 @@ a = Analysis(
         'managers.position_manager', 'managers.esop_manager',
         'managers.stability_manager', 'managers.backup_manager',
         'widgets.nav_bar', 'widgets.sidebar', 'widgets.right_drawer',
-        'widgets.ring_chart', 'widgets.org_chart', 'widgets.chart_nodes',
+        'widgets.ring_chart',
         'pages.dashboard_page', 'pages.org_page', 'pages.employee_page',
         'pages.contract_page', 'pages.salary_page', 'pages.position_page',
         'pages.esop_page', 'pages.stability_page',

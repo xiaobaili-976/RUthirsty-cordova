@@ -125,6 +125,10 @@ class EmployeeForm(QDialog):
         self._status_cb.addItems(["在职", "试用期", "已离职"])
         right_form.addRow("状态", self._status_cb)
 
+        self._type_cb = QComboBox()
+        self._type_cb.addItems(["", "华为", "OD", "外包"])
+        right_form.addRow("员工类型 *", self._type_cb)
+
         basic_grid.addLayout(left_form)
         basic_grid.addSpacing(20)
         basic_grid.addLayout(right_form)
@@ -311,6 +315,12 @@ class EmployeeForm(QDialog):
         if idx >= 0:
             self._status_cb.setCurrentIndex(idx)
 
+        # Employee type
+        etype = getattr(e, "employee_type", "") or ""
+        idx = self._type_cb.findText(etype)
+        if idx >= 0:
+            self._type_cb.setCurrentIndex(idx)
+
         # Dept / group
         for i in range(self._dept_cb.count()):
             if self._dept_cb.itemData(i) == e.dept_id:
@@ -383,6 +393,7 @@ class EmployeeForm(QDialog):
             perf_5times=self._perf_5t.text().strip(),
             perf_5y=self._perf_5y.text().strip(),
             status=_status_map.get(self._status_cb.currentText(), "active"),
+            employee_type=self._type_cb.currentText(),
             avatar_path="",
             notes=self._notes_edit.toPlainText().strip(),
             created_at="",

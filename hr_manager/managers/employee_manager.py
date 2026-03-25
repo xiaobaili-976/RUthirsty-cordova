@@ -37,6 +37,7 @@ class EmployeeManager:
             perf_5times=row["perf_5times"] or "",
             perf_5y=row["perf_5y"] or "",
             status=row["status"] or "active",
+            employee_type=row["employee_type"] if "employee_type" in row.keys() else "",
             avatar_path=row["avatar_path"] or "",
             notes=row["notes"] or "",
             created_at=row["created_at"] or "",
@@ -84,8 +85,8 @@ class EmployeeManager:
                     master_school, master_major, master_grad_year, education_level,
                     dept_id, group_id, job_title, job_level, job_grade, qualification,
                     perf_latest, perf_3y, perf_5times, perf_5y,
-                    status, avatar_path, notes, created_at, updated_at
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    employee_type, status, avatar_path, notes, created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     emp.employee_id, emp.name, emp.gender, emp.dob,
                     emp.id_number, emp.phone, emp.email,
@@ -95,7 +96,7 @@ class EmployeeManager:
                     emp.dept_id, emp.group_id,
                     emp.job_title, emp.job_level, emp.job_grade, emp.qualification,
                     emp.perf_latest, emp.perf_3y, emp.perf_5times, emp.perf_5y,
-                    emp.status, emp.avatar_path, emp.notes, now, now,
+                    emp.employee_type, emp.status, emp.avatar_path, emp.notes, now, now,
                 ),
             )
             return True
@@ -113,7 +114,7 @@ class EmployeeManager:
                     master_school=?, master_major=?, master_grad_year=?, education_level=?,
                     dept_id=?, group_id=?, job_title=?, job_level=?, job_grade=?,
                     qualification=?, perf_latest=?, perf_3y=?, perf_5times=?, perf_5y=?,
-                    status=?, avatar_path=?, notes=?, updated_at=?
+                    employee_type=?, status=?, avatar_path=?, notes=?, updated_at=?
                 WHERE employee_id=?""",
                 (
                     emp.name, emp.gender, emp.dob, emp.id_number, emp.phone, emp.email,
@@ -123,7 +124,7 @@ class EmployeeManager:
                     emp.dept_id, emp.group_id,
                     emp.job_title, emp.job_level, emp.job_grade, emp.qualification,
                     emp.perf_latest, emp.perf_3y, emp.perf_5times, emp.perf_5y,
-                    emp.status, emp.avatar_path, emp.notes, now,
+                    emp.employee_type, emp.status, emp.avatar_path, emp.notes, now,
                     emp.employee_id,
                 ),
             )

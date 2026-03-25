@@ -32,35 +32,34 @@ RISK_BG = {
     "red":    _RED_LIGHT,
 }
 
-# ── Header / NavBar ───────────────────────────────────────────────────────────
-NAV_HEIGHT  = 52
+# ── Employee type colors ───────────────────────────────────────────────────────
+EMP_TYPE_BORDER = {
+    "华为": "#2ECC71",
+    "OD":   "#3498DB",
+    "外包": "#F39C12",
+    "":     "#AAB4C8",
+}
+EMP_TYPE_BG = {
+    "华为": "#E8F5E9",
+    "OD":   "#E3F2FD",
+    "外包": "#FFF3E0",
+    "":     "#F5F7FA",
+}
+
+# ── Navigation bar (new design) ───────────────────────────────────────────────
+NAV_HEIGHT  = 80
+NAV_BG      = "#F7F8FA"
+NAV_ACTIVE  = "#165DFF"
+NAV_INACTIVE = "#86909C"
+NAV_HOVER   = "#4080FF"
+
 NAV_QSS = f"""
     QWidget#NavBar {{
-        background: {_BLUE};
-        border-bottom: 2px solid {_GOLD};
+        background: {NAV_BG};
+        border-bottom: 1px solid #E0E4EA;
     }}
 """
-
-NAV_TAB_QSS = f"""
-    QPushButton {{
-        color: rgba(255,255,255,0.75);
-        background: transparent;
-        border: none;
-        border-bottom: 3px solid transparent;
-        padding: 0 16px;
-        font-size: 13px;
-        font-family: "Microsoft YaHei", sans-serif;
-    }}
-    QPushButton:hover {{
-        color: white;
-        background: rgba(255,255,255,0.08);
-    }}
-    QPushButton[active="true"] {{
-        color: white;
-        border-bottom: 3px solid {_GOLD};
-        font-weight: bold;
-    }}
-"""
+NAV_TAB_QSS = ""   # kept for backward compat
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 SIDEBAR_QSS = f"""
@@ -82,7 +81,7 @@ CARD_QSS = f"""
     QFrame.card {{
         background: white;
         border: 1px solid {_BORDER};
-        border-radius: 8px;
+        border-radius: 12px;
     }}
 """
 
@@ -92,7 +91,7 @@ BTN_PRIMARY = f"""
         background: {_BLUE};
         color: white;
         border: none;
-        border-radius: 6px;
+        border-radius: 12px;
         padding: 7px 18px;
         font-size: 13px;
     }}
@@ -106,7 +105,7 @@ BTN_SECONDARY = f"""
         background: white;
         color: {_BLUE};
         border: 1px solid {_BLUE};
-        border-radius: 6px;
+        border-radius: 12px;
         padding: 6px 16px;
         font-size: 13px;
     }}
@@ -119,7 +118,7 @@ BTN_DANGER = f"""
         background: white;
         color: {_RED};
         border: 1px solid {_RED};
-        border-radius: 6px;
+        border-radius: 12px;
         padding: 6px 16px;
         font-size: 13px;
     }}
@@ -131,7 +130,7 @@ TABLE_QSS = f"""
     QTableWidget {{
         background: white;
         border: 1px solid {_BORDER};
-        border-radius: 6px;
+        border-radius: 12px;
         gridline-color: {_BORDER};
         font-size: 12px;
     }}

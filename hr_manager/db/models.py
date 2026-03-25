@@ -102,6 +102,7 @@ class Employee:
     perf_3y: str = ""            # 近3年绩效
     perf_5times: str = ""        # 近5次绩效
     perf_5y: str = ""            # 近5年绩效
+    employee_type: str = ""      # 华为 / OD / 外包
     status: str = "active"       # active / probation / resigned
     avatar_path: str = ""
     notes: str = ""

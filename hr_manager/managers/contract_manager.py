@@ -83,7 +83,7 @@ class ContractManager:
         except Exception as e:
             return False
 
-    def get_expiring_soon(self, days: int = 30) -> list[dict]:
+    def get_expiring_soon(self, days: int = 270) -> list[dict]:
         """Return contracts whose renewal_date is within `days` days from today."""
         rows = self._db.fetchall(
             "SELECT c.*, e.name FROM contracts c "

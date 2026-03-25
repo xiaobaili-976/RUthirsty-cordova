@@ -98,6 +98,7 @@ class DatabaseManager:
                 perf_3y            TEXT DEFAULT '',
                 perf_5times        TEXT DEFAULT '',
                 perf_5y            TEXT DEFAULT '',
+                employee_type      TEXT DEFAULT '',
                 status             TEXT DEFAULT 'active',
                 avatar_path        TEXT DEFAULT '',
                 notes              TEXT DEFAULT '',
@@ -223,3 +224,12 @@ class DatabaseManager:
         for stmt in stmts:
             conn.execute(stmt)
         conn.commit()
+        # ── Migrations for existing databases ──────────────────────────────
+        self._migrate(conn)
+
+    def _migrate(self, conn: sqlite3.Connection) -> None:
+        """Add columns that may not exist in older databases."""
+        existing = {row[1] for row in conn.execute("PRAGMA table_info(employees)").fetchall()}
+        if "employee_type" not in existing:
+            conn.execute("ALTER TABLE employees ADD COLUMN employee_type TEXT DEFAULT ''")
+            conn.commit()

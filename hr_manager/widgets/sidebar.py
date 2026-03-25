@@ -108,11 +108,16 @@ class Sidebar(QWidget):
         cont_mgr = self._mgr.get("contract")
         if not cont_mgr:
             return
-        for item in cont_mgr.get_expiring_soon(30):
+        for item in cont_mgr.get_expiring_soon(270):
             d = item["days_left"]
-            color = _RED if d <= 7 else "#E67E22"
+            if d <= 90:
+                color, icon = "#C0392B", "🔴"
+            elif d <= 180:
+                color, icon = "#E67E22", "🟠"
+            else:
+                color, icon = "#F39C12", "🟡"
             li = QListWidgetItem(
-                f"{'🔴' if d<=7 else '🟡'} {item['name']} ({d}天)"
+                f"{icon} {item['name']} ({d}天)"
             )
             li.setData(Qt.ItemDataRole.UserRole, item["employee_id"])
             li.setForeground(QColor(color))
