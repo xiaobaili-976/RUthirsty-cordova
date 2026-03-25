@@ -980,7 +980,7 @@ class MainWindow(QMainWindow):
             f"background:{_HI}; border-radius:7px; margin-top:2px;"
         )
         rsi = QVBoxLayout(self._rev_sec_frame)
-        rsi.setContentsMargins(16, 10, 16, 10)
+        rsi.setContentsMargins(16, 10, 16, 4)
         self._rev_sec_lbl = QLabel("")
         self._rev_sec_lbl.setStyleSheet(
             "font-size:15px; color:#333; font-style:italic;"
@@ -997,10 +997,10 @@ class MainWindow(QMainWindow):
             f"border-radius:6px; margin-top:2px;"
         )
         raf = QVBoxLayout(self._rev_ans_frame)
-        raf.setContentsMargins(12, 8, 12, 8)
+        raf.setContentsMargins(12, 8, 12, 3)
         ans_title = QLabel("参考答案 / Reference Answer")
         ans_title.setStyleSheet(
-            f"color:{_BLUE}; font-size:14px; font-weight:bold; border:none;"
+            f"color:{_BLUE}; font-size:18px; font-weight:bold; border:none;"
         )
         raf.addWidget(ans_title)
         self._rev_ans_te = QTextEdit()
