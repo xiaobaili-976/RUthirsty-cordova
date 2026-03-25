@@ -51,8 +51,6 @@ def main():
     font = QFont("Microsoft YaHei", 10)
     app.setFont(font)
 
-    # High-DPI
-    app.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
 
     # ── Init backend ──────────────────────────────────────────────────────
     try:
