@@ -374,6 +374,15 @@ class _WAVPlayer:
                 QTimer.singleShot(0, on_done)
 
 
+def _body_html(text: str) -> str:
+    """Wrap plain text in body-style HTML with line-height 1.3."""
+    return (
+        '<span style="line-height:1.3;">'
+        + _html.escape(text).replace('\n', '<br>')
+        + '</span>'
+    )
+
+
 class MainWindow(QMainWindow):
     def __init__(self, engine, recorder, license_mgr=None,
                  marks_mgr=None, review_engine=None):
@@ -1231,11 +1240,11 @@ class MainWindow(QMainWindow):
         else:
             self._current_image = ""
             self._content_stack.setCurrentIndex(0)
-            self._text_lbl.setText(data.get("content", ""))
+            self._text_lbl.setText(_body_html(data.get("content", "")))
 
         sec = data.get("secondary", "")
         if sec:
-            self._sec_lbl.setText(sec)
+            self._sec_lbl.setText(_body_html(sec))
             self._sec_frame.show()
         else:
             self._sec_frame.hide()
@@ -1830,7 +1839,7 @@ class MainWindow(QMainWindow):
                 f'font-family: Calibri, Georgia, Arial, sans-serif;'
                 f'font-size: 14pt;'
                 f'color: #333333;'
-                f'line-height: 1.5;'
+                f'line-height: 1.3;'
                 f'margin: 0;'
                 f'text-align: left;'
                 f'">{escaped}</p>'
@@ -1840,7 +1849,7 @@ class MainWindow(QMainWindow):
                 '<p style="'
                 'font-family: Calibri, Georgia, Arial, sans-serif;'
                 'font-size: 14pt; color: #888888; font-style: italic; '
-                'line-height: 1.5; margin: 0;">'
+                'line-height: 1.3; margin: 0;">'
                 '（本题暂无参考答案）</p>'
             )
         te.setHtml(html_body)
@@ -1962,10 +1971,10 @@ class MainWindow(QMainWindow):
             self._rev_counter_lbl.setText("0 / 0")
             self._rev_q_title.setText("暂无题目")
             self._rev_part_lbl.setText("")
-            self._rev_text_lbl.setText(
+            self._rev_text_lbl.setText(_body_html(
                 "本模式暂无题目。\n请先在随机练习或答案速背中"
                 "使用 ★标记高频 / ●标记薄弱 标记题目后再使用此模式。"
-            )
+            ))
             self._rev_content_stack.setCurrentIndex(0)
             self._rev_sec_frame.hide()
             self._rev_ans_frame.hide()
@@ -1998,12 +2007,12 @@ class MainWindow(QMainWindow):
         else:
             self._rev_cur_image = ""
             self._rev_content_stack.setCurrentIndex(0)
-            self._rev_text_lbl.setText(q.get("content", ""))
+            self._rev_text_lbl.setText(_body_html(q.get("content", "")))
 
         # Secondary (Part 3/4)
         sec = q.get("secondary", "")
         if sec:
-            self._rev_sec_lbl.setText(sec)
+            self._rev_sec_lbl.setText(_body_html(sec))
             self._rev_sec_frame.show()
         else:
             self._rev_sec_frame.hide()
@@ -2041,13 +2050,13 @@ class MainWindow(QMainWindow):
             html_body = (
                 f'<p style="'
                 f'font-family: Calibri, Georgia, Arial, sans-serif;'
-                f'font-size: 16pt; color: #333333; line-height: 1.7; margin:0;">'
+                f'font-size: 16pt; color: #333333; line-height: 1.3; margin:0;">'
                 f'{escaped}</p>'
             )
         else:
             html_body = (
                 '<p style="font-family:Calibri,Arial,sans-serif;'
-                'font-size:16pt;color:#888;font-style:italic;margin:0;">'
+                'font-size:16pt;color:#888;font-style:italic;line-height:1.3;margin:0;">'
                 '（本题暂无参考答案）</p>'
             )
         self._rev_ans_te.setHtml(html_body)
@@ -2541,7 +2550,7 @@ class MainWindow(QMainWindow):
         pm = QPixmap(path)
         if pm.isNull():
             self._content_stack.setCurrentIndex(0)
-            self._text_lbl.setText(f"[Image not found: {path}]")
+            self._text_lbl.setText(_body_html(f"[Image not found: {path}]"))
             return
         w = max(self._img_lbl.width() - 20, 600)
         h = max(self._img_lbl.height() - 20, 400)
@@ -2560,7 +2569,7 @@ class MainWindow(QMainWindow):
         pm = QPixmap(path)
         if pm.isNull():
             self._rev_content_stack.setCurrentIndex(0)
-            self._rev_text_lbl.setText(f"[Image not found: {path}]")
+            self._rev_text_lbl.setText(_body_html(f"[Image not found: {path}]"))
             return
         w = max(self._rev_img_lbl.width() - 20, 500)
         h = max(self._rev_img_lbl.height() - 20, 350)
