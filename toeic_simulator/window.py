@@ -936,11 +936,10 @@ class MainWindow(QMainWindow):
 
         # Content stack: 0=text, 1=image
         self._rev_content_stack = QStackedWidget()
-        self._rev_content_stack.setMinimumHeight(100)
         self._rev_content_stack.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
-        c_lay.addWidget(self._rev_content_stack)
+        c_lay.addWidget(self._rev_content_stack, 1)
 
         # text page
         rtp   = QWidget()
@@ -953,7 +952,7 @@ class MainWindow(QMainWindow):
             Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft
         )
         self._rev_text_lbl.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         rsc = QScrollArea()
         rsc.setWidget(self._rev_text_lbl)
@@ -1022,8 +1021,8 @@ class MainWindow(QMainWindow):
         self._rev_ans_frame.hide()
         c_lay.addWidget(self._rev_ans_frame)
 
-        # Stretch at bottom — keeps all frames hugging the content above
-        c_lay.addStretch(1)
+        # Small fixed gap at bottom of content area
+        c_lay.addSpacing(10)
 
         lay.addWidget(content_area, 1)
 
