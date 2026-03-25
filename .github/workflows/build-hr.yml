@@ -32,9 +32,9 @@ jobs:
         id: version
         shell: bash
         run: |
-          COUNT=$(git rev-list --count HEAD -- hr_manager/)
-          echo "tag=v1.0.${COUNT}" >> $GITHUB_OUTPUT
-          echo "name=HR Manager v1.0.${COUNT}" >> $GITHUB_OUTPUT
+          N=${{ github.run_number }}
+          echo "tag=v1.0.${N}" >> $GITHUB_OUTPUT
+          echo "name=HR Manager v1.0.${N}" >> $GITHUB_OUTPUT
 
       - name: Package release
         shell: pwsh
