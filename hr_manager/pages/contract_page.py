@@ -3,11 +3,11 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from datetime import date, datetime
+from datetime import date
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QComboBox, QMessageBox, QAbstractItemView
+    QTableWidget, QTableWidgetItem, QHeaderView,
+    QMessageBox, QAbstractItemView
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -16,39 +16,37 @@ from styles import (
     _BLUE, _LIGHT, _BORDER, _RED, _RED_LIGHT, _YELLOW, _GREEN,
     TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER
 )
+from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
 
-_COLS = ["工号", "姓名", "合同类型", "入职日期", "工作时长(月)", "合同结束", "续签日期", "续签倒计时", "状态"]
+_COLS = ["工号", "姓名", "入职日期", "工作时长(月)", "合同次数", "续签日期", "续签倒计时"]
 
-_STATUS_DISPLAY = {
-    "active": "在职",
-    "expired": "已到期",
-    "terminated": "已终止",
-}
 
-_STATUS_MAP = {
-    0: None,
-    1: "active",
-    2: "expired",
-    3: "terminated",
-}
+def _calc_renewal_info(hire_date_str: str):
+    """Return (renewal_count, renewal_date_iso) based on 4-year cycle."""
+    try:
+        hire = date.fromisoformat(hire_date_str)
+        today = date.today()
+        years = (today - hire).days / 365.25
+        count = int(years / 4)
+        renewal_year = hire.year + (count + 1) * 4
+        renewal = date(renewal_year, hire.month, hire.day)
+        return count, renewal.isoformat()
+    except Exception:
+        return 0, ""
 
 
 def _months_between(d1: str, d2: str) -> str:
-    """Return months between two ISO date strings, or ''."""
     try:
         a = date.fromisoformat(d1)
         b = date.fromisoformat(d2)
-        months = (b.year - a.year) * 12 + (b.month - a.month)
-        return str(months)
+        return str((b.year - a.year) * 12 + (b.month - a.month))
     except Exception:
         return ""
 
 
-def _days_to(target_date: str) -> int | None:
-    """Days from today to target_date. Returns None if blank/invalid."""
+def _days_to(target_date: str):
     try:
-        td = date.fromisoformat(target_date)
-        return (td - date.today()).days
+        return (date.fromisoformat(target_date) - date.today()).days
     except Exception:
         return None
 
@@ -72,18 +70,11 @@ class ContractPage(QWidget):
         top.addWidget(title)
         top.addStretch(1)
 
-        self._search = QLineEdit()
-        self._search.setPlaceholderText("搜索姓名/工号…")
-        self._search.setFixedWidth(180)
-        self._search.setFixedHeight(32)
-        self._search.textChanged.connect(self._load_table)
-        top.addWidget(self._search)
-
-        self._status_filter = QComboBox()
-        self._status_filter.addItems(["全部状态", "在职", "已到期", "已终止"])
-        self._status_filter.setFixedHeight(32)
-        self._status_filter.currentIndexChanged.connect(self._load_table)
-        top.addWidget(self._status_filter)
+        customize_btn = QPushButton("表头定制")
+        customize_btn.setStyleSheet(BTN_SECONDARY)
+        customize_btn.setFixedHeight(32)
+        customize_btn.clicked.connect(self._on_customize)
+        top.addWidget(customize_btn)
 
         add_btn = QPushButton("+ 新增合同")
         add_btn.setStyleSheet(BTN_PRIMARY)
@@ -95,7 +86,7 @@ class ContractPage(QWidget):
         # Legend
         legend = QHBoxLayout()
         legend.addStretch(1)
-        for color, text in [(_RED_LIGHT, "≤7天到期"), ("#FEF3CD", "≤30天到期")]:
+        for color, text in [(_RED_LIGHT, "≤7天续签"), ("#FEF3CD", "≤30天续签")]:
             dot = QLabel("  ")
             dot.setStyleSheet(f"background:{color}; border: 1px solid #ccc; border-radius:3px;")
             dot.setFixedSize(18, 14)
@@ -139,6 +130,8 @@ class ContractPage(QWidget):
         bot.addWidget(del_btn)
         lay.addLayout(bot)
 
+        init_col_filter(self)
+
     def refresh(self):
         self._load_table()
 
@@ -148,34 +141,26 @@ class ContractPage(QWidget):
             return
         contracts = cont_mgr.get_all_contracts()
 
-        query = self._search.text().strip().lower()
-        status_key = _STATUS_MAP.get(self._status_filter.currentIndex())
-
-        if query:
-            contracts = [c for c in contracts
-                         if query in c.employee_id.lower() or query in c.employee_name.lower()]
-        if status_key:
-            contracts = [c for c in contracts if c.status == status_key]
-
         self._table.setRowCount(len(contracts))
         for row, c in enumerate(contracts):
-            days = _days_to(c.renewal_date) if c.renewal_date else None
+            # Auto-compute from hire_date
+            count, renewal_date = _calc_renewal_info(c.hire_date)
+            # Prefer stored renewal_date if contract already has one
+            renewal_iso = c.renewal_date if c.renewal_date else renewal_date
+            days = _days_to(renewal_iso)
             duration = _months_between(c.hire_date, date.today().isoformat())
             countdown_text = f"{days} 天" if days is not None else "-"
-            status_text = _STATUS_DISPLAY.get(c.status, c.status)
 
             vals = [
                 c.employee_id,
                 c.employee_name,
-                c.contract_type,
                 c.hire_date,
                 duration,
-                c.end_date,
-                c.renewal_date,
+                str(count),
+                renewal_iso,
                 countdown_text,
-                status_text,
             ]
-            # Row color
+
             if days is not None and days <= 7:
                 bg = QColor(_RED_LIGHT)
             elif days is not None and days <= 30:
@@ -190,9 +175,12 @@ class ContractPage(QWidget):
                     item.setBackground(bg)
                 self._table.setItem(row, col, item)
 
-        self._count_lbl.setText(f"共 {len(contracts)} 条")
+        apply_col_filters(self)
 
-    def _selected_contract_id(self) -> int | None:
+    def _on_customize(self):
+        show_col_customize_menu(self, self.sender(), _COLS)
+
+    def _selected_contract_id(self):
         row = self._table.currentRow()
         if row < 0:
             return None
@@ -214,7 +202,6 @@ class ContractPage(QWidget):
             QMessageBox.warning(self, "提示", "请先选择一条记录")
             return
         cont_mgr = self._mgr.get("contract")
-        # Find contract by id
         all_contracts = cont_mgr.get_all_contracts() if cont_mgr else []
         contract = next((c for c in all_contracts if c.contract_id == cid), None)
         if not contract:

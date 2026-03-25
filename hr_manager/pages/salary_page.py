@@ -1,4 +1,4 @@
-"""SalaryPage — salary management with pay band progress bar in cells."""
+"""SalaryPage — salary management."""
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QMessageBox, QAbstractItemView, QProgressBar
+    QMessageBox, QAbstractItemView
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
@@ -15,8 +15,9 @@ from styles import (
     _BLUE, _LIGHT, _BORDER, _RED, _GREEN, _YELLOW,
     TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER
 )
+from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
 
-_COLS = ["工号", "姓名", "生效日期", "基本工资", "绩效工资", "总工资", "薪酬带", "CR", "规划调薪日期"]
+_COLS = ["工号", "姓名", "基本工资", "绩效工资", "总工资", "CR", "规划调薪"]
 
 
 def _fmt_money(v) -> str:
@@ -24,18 +25,6 @@ def _fmt_money(v) -> str:
         return f"{float(v):,.0f}"
     except Exception:
         return str(v) if v else "-"
-
-
-def _band_pct(total, band_min, band_max) -> int:
-    """Return salary position in band as integer 0-100."""
-    try:
-        lo, hi = float(band_min), float(band_max)
-        tot = float(total)
-        if hi <= lo:
-            return 0
-        return max(0, min(100, int((tot - lo) / (hi - lo) * 100)))
-    except Exception:
-        return 0
 
 
 class SalaryPage(QWidget):
@@ -64,6 +53,12 @@ class SalaryPage(QWidget):
         self._search.textChanged.connect(self._load_table)
         top.addWidget(self._search)
 
+        customize_btn = QPushButton("表头定制")
+        customize_btn.setStyleSheet(BTN_SECONDARY)
+        customize_btn.setFixedHeight(32)
+        customize_btn.clicked.connect(self._on_customize)
+        top.addWidget(customize_btn)
+
         add_btn = QPushButton("+ 新增记录")
         add_btn.setStyleSheet(BTN_PRIMARY)
         add_btn.setFixedHeight(32)
@@ -80,7 +75,6 @@ class SalaryPage(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._table.verticalHeader().hide()
-        self._table.setRowHeight(0, 36)
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
@@ -107,18 +101,18 @@ class SalaryPage(QWidget):
         bot.addWidget(del_btn)
         lay.addLayout(bot)
 
+        init_col_filter(self)
+
     def refresh(self):
         self._load_table()
 
     def _all_salary_records(self):
-        """Retrieve one latest salary record per employee."""
         emp_mgr = self._mgr.get("employee")
         sal_mgr = self._mgr.get("salary")
         if not emp_mgr or not sal_mgr:
             return []
-        employees = emp_mgr.list_employees()
         records = []
-        for e in employees:
+        for e in emp_mgr.list_employees():
             s = sal_mgr.get_current(e.employee_id)
             if s:
                 records.append(s)
@@ -133,59 +127,30 @@ class SalaryPage(QWidget):
 
         self._table.setRowCount(len(records))
         for row, s in enumerate(records):
-            pct = _band_pct(s.total_salary, s.band_min, s.band_max)
+            cr_text = f"{s.cr:.0%}" if s.cr else "-"
             vals = [
                 s.employee_id,
                 s.employee_name,
-                s.effective_date,
                 _fmt_money(s.base_salary),
                 _fmt_money(s.performance_pay),
                 _fmt_money(s.total_salary),
-                s.pay_band,
-                f"{s.cr:.0%}" if s.cr else "-",
+                cr_text,
                 s.planned_raise_date or "-",
             ]
-            self._table.setRowHeight(row, 36)
             for col, val in enumerate(vals):
-                if col == 6:
-                    # Pay band column: show progress bar widget
-                    bar = QProgressBar()
-                    bar.setRange(0, 100)
-                    bar.setValue(pct)
-                    bar.setFormat(f"{s.pay_band}  {pct}%")
-                    bar.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    # Color by position
-                    if pct < 80:
-                        bar_color = _GREEN
-                    elif pct < 100:
-                        bar_color = _YELLOW
-                    else:
-                        bar_color = _RED
-                    bar.setStyleSheet(f"""
-                        QProgressBar {{
-                            border: 1px solid {_BORDER};
-                            border-radius: 4px;
-                            background: #f0f0f0;
-                            font-size: 11px;
-                        }}
-                        QProgressBar::chunk {{
-                            background: {bar_color};
-                            border-radius: 3px;
-                        }}
-                    """)
-                    self._table.setCellWidget(row, col, bar)
-                else:
-                    item = QTableWidgetItem(val or "")
-                    item.setData(Qt.ItemDataRole.UserRole, s.salary_id)
-                    self._table.setItem(row, col, item)
+                item = QTableWidgetItem(val or "")
+                item.setData(Qt.ItemDataRole.UserRole, s.salary_id)
+                self._table.setItem(row, col, item)
 
-        self._count_lbl.setText(f"共 {len(records)} 条")
+        apply_col_filters(self)
 
-    def _selected_salary_id(self) -> int | None:
+    def _on_customize(self):
+        show_col_customize_menu(self, self.sender(), _COLS)
+
+    def _selected_salary_id(self):
         row = self._table.currentRow()
         if row < 0:
             return None
-        # Try col 0 first; col 6 has widget
         for col in range(len(_COLS)):
             item = self._table.item(row, col)
             if item:
@@ -215,9 +180,7 @@ class SalaryPage(QWidget):
             return
         eid = self._selected_employee_id()
         sal_mgr = self._mgr.get("salary")
-        salary = None
-        if sal_mgr and eid:
-            salary = sal_mgr.get_current(eid)
+        salary = sal_mgr.get_current(eid) if sal_mgr and eid else None
         if not salary:
             return
         from dialogs.salary_form import SalaryForm

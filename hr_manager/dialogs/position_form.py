@@ -3,22 +3,14 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from datetime import date
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QLineEdit, QComboBox, QDateEdit, QCompleter, QMessageBox, QWidget
+    QLineEdit, QComboBox, QCompleter, QMessageBox, QWidget
 )
 from PyQt6.QtCore import Qt, QDate
 
-from styles import _BLUE, _LIGHT, _BORDER, BTN_PRIMARY, BTN_SECONDARY, INPUT_QSS
-
-
-def _to_qdate(iso: str) -> QDate:
-    from datetime import date
-    try:
-        d = date.fromisoformat(iso)
-        return QDate(d.year, d.month, d.day)
-    except Exception:
-        return QDate.currentDate()
+from styles import _BLUE, _LIGHT, _BORDER, _TEXT_SEC, BTN_PRIMARY, BTN_SECONDARY, INPUT_QSS
 
 
 class PositionForm(QDialog):
@@ -29,6 +21,7 @@ class PositionForm(QDialog):
         self._editing = position is not None
         self.setWindowTitle("编辑职级记录" if self._editing else "新增职级记录")
         self.setMinimumWidth(500)
+        self.setMinimumHeight(420)
         self.setStyleSheet(f"background:{_LIGHT};")
         self._build()
         if self._editing:
@@ -54,8 +47,9 @@ class PositionForm(QDialog):
         content.setStyleSheet("background:white;")
         lay = QFormLayout(content)
         lay.setContentsMargins(24, 16, 24, 12)
-        lay.setSpacing(10)
+        lay.setSpacing(12)
         lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        lay.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         self._eid_edit = QLineEdit()
         self._eid_edit.setPlaceholderText("输入工号或姓名搜索…")
@@ -66,12 +60,8 @@ class PositionForm(QDialog):
             completer = QCompleter(suggestions)
             completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
             self._eid_edit.setCompleter(completer)
+        self._eid_edit.textChanged.connect(self._on_eid_changed)
         lay.addRow("员工工号 *", self._eid_edit)
-
-        self._eff_date = QDateEdit()
-        self._eff_date.setCalendarPopup(True)
-        self._eff_date.setDate(QDate.currentDate())
-        lay.addRow("生效日期", self._eff_date)
 
         self._level_edit = QLineEdit()
         self._level_edit.setPlaceholderText("如: P6")
@@ -82,38 +72,34 @@ class PositionForm(QDialog):
         lay.addRow("职等", self._grade_edit)
 
         self._adj_cb = QComboBox()
-        self._adj_cb.addItems(["晋升", "降级", "平调", "入职"])
+        self._adj_cb.addItems(["调级", "调等"])
         lay.addRow("调整类型", self._adj_cb)
 
-        self._reason_edit = QLineEdit()
-        lay.addRow("调整原因", self._reason_edit)
+        # Read-only lookup fields
+        self._last_adj_lbl = QLabel("-")
+        self._last_adj_lbl.setStyleSheet(
+            f"color:{_TEXT_SEC}; padding:4px 8px; background:#f7f8fa; "
+            f"border:1px solid {_BORDER}; border-radius:4px;"
+        )
+        lay.addRow("最近一次调整日期", self._last_adj_lbl)
 
-        self._approved_by = QLineEdit()
-        lay.addRow("审批人", self._approved_by)
+        self._interval_lbl = QLabel("-")
+        self._interval_lbl.setStyleSheet(
+            f"color:{_TEXT_SEC}; padding:4px 8px; background:#f7f8fa; "
+            f"border:1px solid {_BORDER}; border-radius:4px;"
+        )
+        lay.addRow("距离上次调整间隔", self._interval_lbl)
 
-        # Planned section
-        sep = QLabel("── 规划信息 ──")
-        sep.setStyleSheet(f"color:{_BLUE}; font-size:11px; margin-top:4px;")
-        lay.addRow(sep)
-
-        self._planned_date = QDateEdit()
-        self._planned_date.setCalendarPopup(True)
-        self._planned_date.setDate(QDate.currentDate().addYears(1))
-        lay.addRow("规划调整日期", self._planned_date)
-
-        self._planned_type = QLineEdit()
-        self._planned_type.setPlaceholderText("如: 晋升")
-        lay.addRow("规划调整类型", self._planned_type)
-
-        self._planned_src = QLineEdit()
-        self._planned_src.setPlaceholderText("调整来源/依据")
-        lay.addRow("规划来源", self._planned_src)
+        self._situation_edit = QLineEdit()
+        self._situation_edit.setPlaceholderText("描述本次调整情况…")
+        lay.addRow("调整情况", self._situation_edit)
 
         # Apply style
-        for w in content.findChildren((QLineEdit, QComboBox, QDateEdit)):
+        for w in content.findChildren((QLineEdit, QComboBox)):
             w.setStyleSheet(INPUT_QSS)
 
         root.addWidget(content)
+        root.addStretch(1)
 
         # Buttons
         btn_row = QHBoxLayout()
@@ -131,23 +117,46 @@ class PositionForm(QDialog):
         btn_row.addWidget(save_btn)
         root.addLayout(btn_row)
 
+    def _on_eid_changed(self, text: str):
+        eid = text.split()[0] if text.strip() else ""
+        self._lookup_last_adjustment(eid)
+
+    def _lookup_last_adjustment(self, eid: str):
+        pos_mgr = self._mgr.get("position")
+        if not pos_mgr or not eid:
+            self._last_adj_lbl.setText("-")
+            self._interval_lbl.setText("-")
+            return
+        history = pos_mgr.get_history(eid)
+        # Exclude the current record when editing
+        if self._editing and self._position:
+            history = [p for p in history if p.position_id != self._position.position_id]
+        if not history:
+            self._last_adj_lbl.setText("-")
+            self._interval_lbl.setText("-")
+            return
+        history.sort(key=lambda p: p.effective_date or "", reverse=True)
+        latest = history[0]
+        last_date = latest.effective_date or ""
+        self._last_adj_lbl.setText(last_date or "-")
+        try:
+            d = date.fromisoformat(last_date)
+            days = (date.today() - d).days
+            self._interval_lbl.setText(f"{days} 天")
+        except Exception:
+            self._interval_lbl.setText("-")
+
     def _populate(self):
         p = self._position
         self._eid_edit.setText(p.employee_id)
         self._eid_edit.setReadOnly(True)
-        if p.effective_date:
-            self._eff_date.setDate(_to_qdate(p.effective_date))
         self._level_edit.setText(p.level)
         self._grade_edit.setText(p.grade)
         idx = self._adj_cb.findText(p.adjustment_type)
         if idx >= 0:
             self._adj_cb.setCurrentIndex(idx)
-        self._reason_edit.setText(p.reason)
-        self._approved_by.setText(p.approved_by)
-        if p.planned_date:
-            self._planned_date.setDate(_to_qdate(p.planned_date))
-        self._planned_type.setText(p.planned_type)
-        self._planned_src.setText(p.planned_source)
+        self._situation_edit.setText(p.reason or "")
+        self._lookup_last_adjustment(p.employee_id)
 
     def _parse_employee_id(self) -> str:
         text = self._eid_edit.text().strip()
@@ -167,15 +176,15 @@ class PositionForm(QDialog):
             position_id=self._position.position_id if self._editing else None,
             employee_id=eid,
             employee_name="",
-            effective_date=self._eff_date.date().toString("yyyy-MM-dd"),
+            effective_date=date.today().isoformat(),
             level=self._level_edit.text().strip(),
             grade=self._grade_edit.text().strip(),
             adjustment_type=self._adj_cb.currentText(),
-            reason=self._reason_edit.text().strip(),
-            approved_by=self._approved_by.text().strip(),
-            planned_date=self._planned_date.date().toString("yyyy-MM-dd"),
-            planned_type=self._planned_type.text().strip(),
-            planned_source=self._planned_src.text().strip(),
+            reason=self._situation_edit.text().strip(),
+            approved_by="",
+            planned_date="",
+            planned_type="",
+            planned_source="",
             created_at="",
         )
         ok = pos_mgr.update_record(p) if self._editing else pos_mgr.add_record(p)

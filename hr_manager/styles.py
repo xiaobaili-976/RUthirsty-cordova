@@ -153,7 +153,17 @@ TABLE_QSS = f"""
 
 # ── Form inputs ───────────────────────────────────────────────────────────────
 INPUT_QSS = f"""
-    QLineEdit, QTextEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
+    QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{
+        border: 1px solid {_BORDER};
+        border-radius: 5px;
+        padding: 0px 10px;
+        background: white;
+        font-size: 13px;
+        color: {_TEXT};
+        min-height: 32px;
+        max-height: 36px;
+    }}
+    QTextEdit {{
         border: 1px solid {_BORDER};
         border-radius: 5px;
         padding: 6px 10px;
@@ -165,14 +175,28 @@ INPUT_QSS = f"""
     QSpinBox:focus, QDoubleSpinBox:focus {{
         border-color: {_BLUE};
     }}
+    QComboBox::drop-down {{
+        subcontrol-origin: border;
+        subcontrol-position: center right;
+        width: 24px;
+        border-left: 1px solid {_BORDER};
+        border-top-right-radius: 5px;
+        border-bottom-right-radius: 5px;
+        background: {_LIGHT};
+    }}
+    QComboBox::down-arrow {{
+        width: 10px;
+        height: 10px;
+    }}
     QDateEdit {{
         border: 1px solid {_BORDER};
         border-radius: 5px;
-        padding: 4px 28px 4px 10px;
+        padding: 0px 28px 0px 10px;
         background: white;
         font-size: 13px;
         color: {_TEXT};
-        min-height: 24px;
+        min-height: 32px;
+        max-height: 36px;
     }}
     QDateEdit:focus {{
         border-color: {_BLUE};

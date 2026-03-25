@@ -1,4 +1,4 @@
-"""PositionPage — position / job-level management with color-coded adjustment types."""
+"""PositionPage — position / job-level management."""
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,15 +15,13 @@ from styles import (
     _BLUE, _LIGHT, _BORDER, _RED, _GREEN, _TEXT_SEC,
     TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER
 )
+from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
 
-_COLS = ["工号", "姓名", "生效日期", "职级", "职等", "调整类型", "调整间隔(天)"]
+_COLS = ["工号", "姓名", "职级", "职等", "调整类型", "调整间隔(天)", "调整情况"]
 
-# Color map for adjustment_type
 _ADJ_COLORS = {
-    "晋升": _GREEN,
-    "降级": _RED,
-    "平调": "#888888",
-    "入职": _BLUE,
+    "调级": _GREEN,
+    "调等": _BLUE,
 }
 
 
@@ -62,6 +60,12 @@ class PositionPage(QWidget):
         self._search.setFixedHeight(32)
         self._search.textChanged.connect(self._load_table)
         top.addWidget(self._search)
+
+        customize_btn = QPushButton("表头定制")
+        customize_btn.setStyleSheet(BTN_SECONDARY)
+        customize_btn.setFixedHeight(32)
+        customize_btn.clicked.connect(self._on_customize)
+        top.addWidget(customize_btn)
 
         add_btn = QPushButton("+ 新增记录")
         add_btn.setStyleSheet(BTN_PRIMARY)
@@ -105,20 +109,19 @@ class PositionPage(QWidget):
         bot.addWidget(del_btn)
         lay.addLayout(bot)
 
+        init_col_filter(self)
+
     def refresh(self):
         self._load_table()
 
     def _all_position_records(self):
-        """Retrieve all position records with employee names."""
         emp_mgr = self._mgr.get("employee")
         pos_mgr = self._mgr.get("position")
         if not emp_mgr or not pos_mgr:
             return []
-        employees = emp_mgr.list_employees()
         records = []
-        for e in employees:
-            history = pos_mgr.get_history(e.employee_id)
-            records.extend(history)
+        for e in emp_mgr.list_employees():
+            records.extend(pos_mgr.get_history(e.employee_id))
         return records
 
     def _load_table(self, _=None):
@@ -129,18 +132,18 @@ class PositionPage(QWidget):
                        if query in r.employee_id.lower() or query in r.employee_name.lower()]
 
         # Sort by employee then date descending
-        records.sort(key=lambda r: (r.employee_id, r.effective_date), reverse=True)
+        records.sort(key=lambda r: (r.employee_id, r.effective_date or ""), reverse=True)
 
-        # Compute intervals: for each employee, compare consecutive records
+        # Compute intervals per employee
         prev_dates = {}
         intervals = {}
-        for r in sorted(records, key=lambda r: (r.employee_id, r.effective_date)):
+        for r in sorted(records, key=lambda r: (r.employee_id, r.effective_date or "")):
             pid = r.employee_id
             if pid in prev_dates:
-                intervals[r.position_id] = _days_interval(prev_dates[pid], r.effective_date)
+                intervals[r.position_id] = _days_interval(prev_dates[pid], r.effective_date or "")
             else:
                 intervals[r.position_id] = "-"
-            prev_dates[pid] = r.effective_date
+            prev_dates[pid] = r.effective_date or ""
 
         self._table.setRowCount(len(records))
         for row, p in enumerate(records):
@@ -148,25 +151,28 @@ class PositionPage(QWidget):
             vals = [
                 p.employee_id,
                 p.employee_name,
-                p.effective_date,
                 p.level,
                 p.grade,
                 p.adjustment_type,
                 intervals.get(p.position_id, "-"),
+                p.reason or "",
             ]
             for col, val in enumerate(vals):
                 item = QTableWidgetItem(val or "")
                 item.setData(Qt.ItemDataRole.UserRole, p.position_id)
-                if col == 5:  # adjustment_type column
+                if col == 4:  # adjustment_type column
                     item.setForeground(QColor(adj_color))
                     f = QFont()
                     f.setBold(True)
                     item.setFont(f)
                 self._table.setItem(row, col, item)
 
-        self._count_lbl.setText(f"共 {len(records)} 条")
+        apply_col_filters(self)
 
-    def _selected_position_id(self) -> int | None:
+    def _on_customize(self):
+        show_col_customize_menu(self, self.sender(), _COLS)
+
+    def _selected_position_id(self):
         row = self._table.currentRow()
         if row < 0:
             return None

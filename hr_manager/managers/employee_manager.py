@@ -190,5 +190,11 @@ class EmployeeManager:
             (name, description, lead_employee_id, group_id),
         )
 
+    def reassign_group_dept(self, group_id: int, new_dept_id: int) -> None:
+        self._db.execute(
+            "UPDATE groups SET dept_id=? WHERE group_id=?",
+            (new_dept_id, group_id),
+        )
+
     def delete_group(self, group_id: int) -> None:
         self._db.execute("DELETE FROM groups WHERE group_id=?", (group_id,))

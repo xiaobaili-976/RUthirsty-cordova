@@ -16,6 +16,7 @@ from styles import (
     _YELLOW, TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER,
     RISK_COLOR, RISK_BG
 )
+from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
 
 _COLS = ["工号", "姓名", "评估日期", "家庭分", "职业分", "工作分", "综合评分", "风险等级", "风险标签"]
 
@@ -64,6 +65,12 @@ class StabilityPage(QWidget):
         self._risk_filter.currentIndexChanged.connect(self._load_table)
         top.addWidget(self._risk_filter)
 
+        customize_btn = QPushButton("表头定制")
+        customize_btn.setStyleSheet(BTN_SECONDARY)
+        customize_btn.setFixedHeight(32)
+        customize_btn.clicked.connect(self._on_customize)
+        top.addWidget(customize_btn)
+
         lay.addLayout(top)
 
         # Table
@@ -80,6 +87,8 @@ class StabilityPage(QWidget):
         hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self._table.doubleClicked.connect(self._on_double_click)
         lay.addWidget(self._table, 1)
+
+        init_col_filter(self)
 
         # Bottom bar
         bot = QHBoxLayout()
@@ -170,6 +179,10 @@ class StabilityPage(QWidget):
                 self._table.setItem(row, col, item)
 
         self._count_lbl.setText(f"共 {len(records)} 条")
+        apply_col_filters(self)
+
+    def _on_customize(self):
+        show_col_customize_menu(self, self.sender(), _COLS)
 
     def _selected_stability_id(self) -> int | None:
         row = self._table.currentRow()

@@ -3,23 +3,15 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from datetime import date
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox, QTextEdit, QCompleter,
+    QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QTextEdit, QCompleter,
     QMessageBox, QWidget, QScrollArea
 )
 from PyQt6.QtCore import Qt, QDate
 
-from styles import _BLUE, _LIGHT, _BORDER, BTN_PRIMARY, BTN_SECONDARY, INPUT_QSS
-
-
-def _to_qdate(iso: str) -> QDate:
-    from datetime import date
-    try:
-        d = date.fromisoformat(iso)
-        return QDate(d.year, d.month, d.day)
-    except Exception:
-        return QDate.currentDate()
+from styles import _BLUE, _LIGHT, _BORDER, _TEXT_SEC, BTN_PRIMARY, BTN_SECONDARY, INPUT_QSS
 
 
 def _section_label(text: str) -> QLabel:
@@ -31,6 +23,10 @@ def _section_label(text: str) -> QLabel:
     return lbl
 
 
+_MONTHS = ["01", "02", "03", "04", "05", "06",
+           "07", "08", "09", "10", "11", "12"]
+
+
 class SalaryForm(QDialog):
     def __init__(self, managers: dict, salary=None, parent=None):
         super().__init__(parent)
@@ -38,8 +34,8 @@ class SalaryForm(QDialog):
         self._salary = salary
         self._editing = salary is not None
         self.setWindowTitle("编辑薪酬记录" if self._editing else "新增薪酬记录")
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(580)
+        self.setMinimumWidth(560)
+        self.setMinimumHeight(560)
         self.setStyleSheet(f"background:{_LIGHT};")
         self._build()
         if self._editing:
@@ -71,11 +67,16 @@ class SalaryForm(QDialog):
 
         lay = QVBoxLayout(content)
         lay.setContentsMargins(24, 12, 24, 12)
-        lay.setSpacing(6)
+        lay.setSpacing(8)
 
-        form = QFormLayout()
-        form.setSpacing(8)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        def _make_form():
+            fl = QFormLayout()
+            fl.setSpacing(10)
+            fl.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+            fl.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+            return fl
+
+        form = _make_form()
 
         # Employee ID
         self._eid_edit = QLineEdit()
@@ -88,31 +89,23 @@ class SalaryForm(QDialog):
             completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
             self._eid_edit.setCompleter(completer)
         form.addRow("员工工号 *", self._eid_edit)
-
-        self._eff_date = QDateEdit()
-        self._eff_date.setCalendarPopup(True)
-        self._eff_date.setDate(QDate.currentDate())
-        form.addRow("生效日期", self._eff_date)
-
         lay.addLayout(form)
-        lay.addWidget(_section_label("薪资构成"))
 
-        salary_form = QFormLayout()
-        salary_form.setSpacing(8)
-        salary_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        lay.addWidget(_section_label("薪资构成"))
+        salary_form = _make_form()
 
         self._base_spin = QDoubleSpinBox()
         self._base_spin.setRange(0, 9_999_999)
         self._base_spin.setDecimals(2)
         self._base_spin.setSingleStep(100)
-        self._base_spin.valueChanged.connect(self._update_total)
+        self._base_spin.valueChanged.connect(self._update_totals)
         salary_form.addRow("基本工资", self._base_spin)
 
         self._perf_spin = QDoubleSpinBox()
         self._perf_spin.setRange(0, 9_999_999)
         self._perf_spin.setDecimals(2)
         self._perf_spin.setSingleStep(100)
-        self._perf_spin.valueChanged.connect(self._update_total)
+        self._perf_spin.valueChanged.connect(self._update_totals)
         salary_form.addRow("绩效工资", self._perf_spin)
 
         total_row = QHBoxLayout()
@@ -125,22 +118,9 @@ class SalaryForm(QDialog):
         total_row.addStretch(1)
         salary_form.addRow("总工资（自动）", total_row)
 
-        self._cr_spin = QDoubleSpinBox()
-        self._cr_spin.setRange(0, 5)
-        self._cr_spin.setDecimals(4)
-        self._cr_spin.setSingleStep(0.01)
-        salary_form.addRow("CR 比率", self._cr_spin)
-
-        self._band_edit = QLineEdit()
-        self._band_edit.setPlaceholderText("如: Band 4")
-        salary_form.addRow("薪酬带", self._band_edit)
-
         lay.addLayout(salary_form)
         lay.addWidget(_section_label("薪酬带范围"))
-
-        band_form = QFormLayout()
-        band_form.setSpacing(8)
-        band_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        band_form = _make_form()
 
         self._band_min = QDoubleSpinBox()
         self._band_min.setRange(0, 9_999_999)
@@ -150,6 +130,7 @@ class SalaryForm(QDialog):
         self._band_mid = QDoubleSpinBox()
         self._band_mid.setRange(0, 9_999_999)
         self._band_mid.setDecimals(0)
+        self._band_mid.valueChanged.connect(self._update_totals)
         band_form.addRow("Band 中位", self._band_mid)
 
         self._band_max = QDoubleSpinBox()
@@ -157,41 +138,52 @@ class SalaryForm(QDialog):
         self._band_max.setDecimals(0)
         band_form.addRow("Band 最高", self._band_max)
 
+        cr_row = QHBoxLayout()
+        self._cr_lbl = QLabel("-")
+        self._cr_lbl.setStyleSheet(
+            f"color:{_BLUE}; font-weight:bold; padding:4px 8px; "
+            f"background:#E8F0FE; border-radius:4px;"
+        )
+        cr_row.addWidget(self._cr_lbl)
+        cr_row.addStretch(1)
+        band_form.addRow("CR（自动）", cr_row)
+
         lay.addLayout(band_form)
         lay.addWidget(_section_label("调薪计划"))
-
-        raise_form = QFormLayout()
-        raise_form.setSpacing(8)
-        raise_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
-        self._bonus_spin = QDoubleSpinBox()
-        self._bonus_spin.setRange(0, 9_999_999)
-        self._bonus_spin.setDecimals(2)
-        raise_form.addRow("上年度奖金", self._bonus_spin)
+        raise_form = _make_form()
 
         self._raise_src = QLineEdit()
         raise_form.addRow("调薪来源", self._raise_src)
 
-        self._raise_rsn = QLineEdit()
-        raise_form.addRow("调薪原因", self._raise_rsn)
-
-        self._planned_date = QDateEdit()
-        self._planned_date.setCalendarPopup(True)
-        self._planned_date.setDate(QDate.currentDate().addYears(1))
-        raise_form.addRow("规划调薪日期", self._planned_date)
+        # Year + month planned date
+        ym_row = QHBoxLayout()
+        self._planned_year = QSpinBox()
+        self._planned_year.setRange(2020, 2050)
+        self._planned_year.setValue(date.today().year + 1)
+        ym_row.addWidget(self._planned_year)
+        ym_row.addWidget(QLabel("年"))
+        self._planned_month = QComboBox()
+        self._planned_month.addItems(_MONTHS)
+        self._planned_month.setCurrentIndex(0)
+        ym_row.addWidget(self._planned_month)
+        ym_row.addWidget(QLabel("月"))
+        ym_row.addStretch(1)
+        raise_form.addRow("规划调薪日期", ym_row)
 
         self._planned_amt = QDoubleSpinBox()
         self._planned_amt.setRange(-9_999_999, 9_999_999)
         self._planned_amt.setDecimals(0)
         raise_form.addRow("规划调薪金额", self._planned_amt)
 
-        self._approved_by = QLineEdit()
-        raise_form.addRow("审批人", self._approved_by)
+        self._bonus_spin = QDoubleSpinBox()
+        self._bonus_spin.setRange(0, 9_999_999)
+        self._bonus_spin.setDecimals(2)
+        raise_form.addRow("上年度奖金", self._bonus_spin)
 
         lay.addLayout(raise_form)
 
         # Apply style
-        for w in content.findChildren((QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox)):
+        for w in content.findChildren((QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox)):
             w.setStyleSheet(INPUT_QSS)
 
         # Buttons
@@ -210,31 +202,37 @@ class SalaryForm(QDialog):
         btn_row.addWidget(save_btn)
         root.addLayout(btn_row)
 
-    def _update_total(self):
+    def _update_totals(self):
         total = self._base_spin.value() + self._perf_spin.value()
         self._total_lbl.setText(f"{total:,.2f}")
+        band_mid = self._band_mid.value()
+        if band_mid > 0:
+            cr = total / band_mid
+            self._cr_lbl.setText(f"{cr:.0%}")
+        else:
+            self._cr_lbl.setText("-")
 
     def _populate(self):
         s = self._salary
         self._eid_edit.setText(s.employee_id)
         self._eid_edit.setReadOnly(True)
-        if s.effective_date:
-            self._eff_date.setDate(_to_qdate(s.effective_date))
         self._base_spin.setValue(s.base_salary)
         self._perf_spin.setValue(s.performance_pay)
-        self._update_total()
-        self._cr_spin.setValue(float(s.cr) if s.cr else 0.0)
-        self._band_edit.setText(s.pay_band)
         self._band_min.setValue(float(s.band_min) if s.band_min else 0)
         self._band_mid.setValue(float(s.band_mid) if s.band_mid else 0)
         self._band_max.setValue(float(s.band_max) if s.band_max else 0)
-        self._bonus_spin.setValue(float(s.bonus_last) if s.bonus_last else 0)
+        self._update_totals()
         self._raise_src.setText(s.raise_source)
-        self._raise_rsn.setText(s.raise_reason)
-        if s.planned_raise_date:
-            self._planned_date.setDate(_to_qdate(s.planned_raise_date))
+        # Parse planned_raise_date "YYYY-MM-DD" into year + month
+        if s.planned_raise_date and len(s.planned_raise_date) >= 7:
+            try:
+                parts = s.planned_raise_date.split("-")
+                self._planned_year.setValue(int(parts[0]))
+                self._planned_month.setCurrentIndex(int(parts[1]) - 1)
+            except Exception:
+                pass
         self._planned_amt.setValue(float(s.planned_raise_amount) if s.planned_raise_amount else 0)
-        self._approved_by.setText(s.approved_by)
+        self._bonus_spin.setValue(float(s.bonus_last) if s.bonus_last else 0)
 
     def _parse_employee_id(self) -> str:
         text = self._eid_edit.text().strip()
@@ -249,27 +247,34 @@ class SalaryForm(QDialog):
             QMessageBox.warning(self, "提示", "请填写员工工号")
             return
 
-        from db.models import Salary
         total = self._base_spin.value() + self._perf_spin.value()
+        band_mid = self._band_mid.value()
+        cr = total / band_mid if band_mid > 0 else 0.0
+        planned_date = (
+            f"{self._planned_year.value():04d}-"
+            f"{self._planned_month.currentText()}-01"
+        )
+
+        from db.models import Salary
         s = Salary(
             salary_id=self._salary.salary_id if self._editing else None,
             employee_id=eid,
             employee_name="",
-            effective_date=self._eff_date.date().toString("yyyy-MM-dd"),
+            effective_date=date.today().isoformat(),
             base_salary=self._base_spin.value(),
             performance_pay=self._perf_spin.value(),
             total_salary=total,
-            cr=self._cr_spin.value(),
-            pay_band=self._band_edit.text().strip(),
+            cr=cr,
+            pay_band="",
             band_min=self._band_min.value(),
-            band_mid=self._band_mid.value(),
+            band_mid=band_mid,
             band_max=self._band_max.value(),
             bonus_last=self._bonus_spin.value(),
             raise_source=self._raise_src.text().strip(),
-            raise_reason=self._raise_rsn.text().strip(),
-            planned_raise_date=self._planned_date.date().toString("yyyy-MM-dd"),
+            raise_reason="",
+            planned_raise_date=planned_date,
             planned_raise_amount=self._planned_amt.value(),
-            approved_by=self._approved_by.text().strip(),
+            approved_by="",
             created_at="",
         )
         ok = sal_mgr.update_record(s) if self._editing else sal_mgr.add_record(s)

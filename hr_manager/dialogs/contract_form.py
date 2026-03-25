@@ -6,13 +6,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import date
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QLineEdit, QComboBox, QDateEdit, QTextEdit, QCompleter, QMessageBox,
+    QLineEdit, QDateEdit, QTextEdit, QCompleter, QMessageBox,
     QWidget
 )
-from PyQt6.QtCore import Qt, QDate, QStringListModel
+from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QFont
 
-from styles import _BLUE, _LIGHT, _BORDER, BTN_PRIMARY, BTN_SECONDARY, INPUT_QSS
+from styles import _BLUE, _LIGHT, _BORDER, _TEXT_SEC, BTN_PRIMARY, BTN_SECONDARY, INPUT_QSS
 
 
 def _to_qdate(iso: str) -> QDate:
@@ -23,6 +23,20 @@ def _to_qdate(iso: str) -> QDate:
         return QDate.currentDate()
 
 
+def _calc_renewal_info(hire_date_str: str):
+    """Return (renewal_count, renewal_date_iso) based on 4-year cycle."""
+    try:
+        hire = date.fromisoformat(hire_date_str)
+        today = date.today()
+        years = (today - hire).days / 365.25
+        count = int(years / 4)
+        renewal_year = hire.year + (count + 1) * 4
+        renewal = date(renewal_year, hire.month, hire.day)
+        return count, renewal.isoformat()
+    except Exception:
+        return 0, ""
+
+
 class ContractForm(QDialog):
     def __init__(self, managers: dict, contract=None, parent=None):
         super().__init__(parent)
@@ -30,7 +44,8 @@ class ContractForm(QDialog):
         self._contract = contract
         self._editing = contract is not None
         self.setWindowTitle("编辑合同" if self._editing else "新增合同")
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(480)
+        self.setMinimumHeight(340)
         self.setStyleSheet(f"background:{_LIGHT};")
         self._build()
         if self._editing:
@@ -56,8 +71,9 @@ class ContractForm(QDialog):
         content.setStyleSheet("background:white;")
         lay = QFormLayout(content)
         lay.setContentsMargins(24, 16, 24, 12)
-        lay.setSpacing(10)
+        lay.setSpacing(12)
         lay.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        lay.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         # Employee ID with completer
         self._eid_edit = QLineEdit()
@@ -71,48 +87,38 @@ class ContractForm(QDialog):
             self._eid_edit.setCompleter(completer)
         lay.addRow("员工工号 *", self._eid_edit)
 
-        self._type_cb = QComboBox()
-        self._type_cb.addItems(["固定期限", "无固定期限", "实习"])
-        lay.addRow("合同类型", self._type_cb)
-
         self._hire_date = QDateEdit()
         self._hire_date.setCalendarPopup(True)
         self._hire_date.setDate(QDate.currentDate())
+        self._hire_date.dateChanged.connect(self._update_renewal_info)
         lay.addRow("入职日期", self._hire_date)
 
-        self._start_date = QDateEdit()
-        self._start_date.setCalendarPopup(True)
-        self._start_date.setDate(QDate.currentDate())
-        lay.addRow("合同开始日期", self._start_date)
+        # Auto-calculated read-only fields
+        self._renewal_date_lbl = QLabel("-")
+        self._renewal_date_lbl.setStyleSheet(
+            f"color:{_BLUE}; font-weight:bold; padding:4px 8px; "
+            f"background:#E8F0FE; border-radius:4px;"
+        )
+        lay.addRow("续签日期（自动）", self._renewal_date_lbl)
 
-        self._end_date = QDateEdit()
-        self._end_date.setCalendarPopup(True)
-        self._end_date.setDate(QDate.currentDate().addYears(1))
-        lay.addRow("合同结束日期", self._end_date)
-
-        self._renewal_date = QDateEdit()
-        self._renewal_date.setCalendarPopup(True)
-        self._renewal_date.setDate(QDate.currentDate().addYears(1))
-        lay.addRow("续签日期", self._renewal_date)
-
-        self._prob_end = QDateEdit()
-        self._prob_end.setCalendarPopup(True)
-        self._prob_end.setDate(QDate.currentDate().addMonths(3))
-        lay.addRow("试用期结束", self._prob_end)
-
-        self._status_cb = QComboBox()
-        self._status_cb.addItems(["active", "expired", "terminated"])
-        lay.addRow("状态", self._status_cb)
+        self._renewal_count_lbl = QLabel("0")
+        self._renewal_count_lbl.setStyleSheet(
+            f"color:{_BLUE}; font-weight:bold; padding:4px 8px; "
+            f"background:#E8F0FE; border-radius:4px;"
+        )
+        lay.addRow("合同次数（自动）", self._renewal_count_lbl)
 
         self._notes_edit = QTextEdit()
         self._notes_edit.setFixedHeight(60)
         lay.addRow("备注", self._notes_edit)
 
         # Apply style
-        for w in content.findChildren((QLineEdit, QTextEdit, QComboBox, QDateEdit)):
+        for w in content.findChildren((QLineEdit, QDateEdit)):
             w.setStyleSheet(INPUT_QSS)
+        self._notes_edit.setStyleSheet(INPUT_QSS)
 
         root.addWidget(content)
+        root.addStretch(1)
 
         # Buttons
         btn_row = QHBoxLayout()
@@ -130,30 +136,25 @@ class ContractForm(QDialog):
         btn_row.addWidget(save_btn)
         root.addLayout(btn_row)
 
+        # Initialise labels
+        self._update_renewal_info()
+
+    def _update_renewal_info(self):
+        hire_date = self._hire_date.date().toString("yyyy-MM-dd")
+        count, renewal_date = _calc_renewal_info(hire_date)
+        self._renewal_date_lbl.setText(renewal_date or "-")
+        self._renewal_count_lbl.setText(str(count))
+
     def _populate(self):
         c = self._contract
         self._eid_edit.setText(c.employee_id)
         self._eid_edit.setReadOnly(True)
-        idx = self._type_cb.findText(c.contract_type)
-        if idx >= 0:
-            self._type_cb.setCurrentIndex(idx)
         if c.hire_date:
             self._hire_date.setDate(_to_qdate(c.hire_date))
-        if c.start_date:
-            self._start_date.setDate(_to_qdate(c.start_date))
-        if c.end_date:
-            self._end_date.setDate(_to_qdate(c.end_date))
-        if c.renewal_date:
-            self._renewal_date.setDate(_to_qdate(c.renewal_date))
-        if c.probation_end:
-            self._prob_end.setDate(_to_qdate(c.probation_end))
-        idx = self._status_cb.findText(c.status)
-        if idx >= 0:
-            self._status_cb.setCurrentIndex(idx)
+        self._update_renewal_info()
         self._notes_edit.setPlainText(c.notes)
 
     def _parse_employee_id(self) -> str:
-        """Extract pure employee_id from completer text like '001 张三'."""
         text = self._eid_edit.text().strip()
         return text.split()[0] if text else ""
 
@@ -166,18 +167,21 @@ class ContractForm(QDialog):
             QMessageBox.warning(self, "提示", "请填写员工工号")
             return
 
+        hire_date = self._hire_date.date().toString("yyyy-MM-dd")
+        _, renewal_date = _calc_renewal_info(hire_date)
+
         from db.models import Contract
         c = Contract(
             contract_id=self._contract.contract_id if self._editing else None,
             employee_id=eid,
             employee_name="",
-            contract_type=self._type_cb.currentText(),
-            hire_date=self._hire_date.date().toString("yyyy-MM-dd"),
-            start_date=self._start_date.date().toString("yyyy-MM-dd"),
-            end_date=self._end_date.date().toString("yyyy-MM-dd"),
-            renewal_date=self._renewal_date.date().toString("yyyy-MM-dd"),
-            probation_end=self._prob_end.date().toString("yyyy-MM-dd"),
-            status=self._status_cb.currentText(),
+            contract_type="固定期限",
+            hire_date=hire_date,
+            start_date=hire_date,
+            end_date="",
+            renewal_date=renewal_date,
+            probation_end="",
+            status="active",
             notes=self._notes_edit.toPlainText().strip(),
             created_at="",
         )

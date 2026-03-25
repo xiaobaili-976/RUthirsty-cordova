@@ -3,32 +3,15 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from datetime import date
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel, QPushButton,
-    QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox, QTextEdit, QCompleter,
+    QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox, QTextEdit, QCompleter,
     QMessageBox, QWidget, QScrollArea
 )
-from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtCore import Qt
 
 from styles import _BLUE, _LIGHT, _BORDER, BTN_PRIMARY, BTN_SECONDARY, INPUT_QSS
-
-
-def _to_qdate(iso: str) -> QDate:
-    from datetime import date
-    try:
-        d = date.fromisoformat(iso)
-        return QDate(d.year, d.month, d.day)
-    except Exception:
-        return QDate.currentDate()
-
-
-def _section_label(text: str) -> QLabel:
-    lbl = QLabel(text)
-    lbl.setStyleSheet(
-        f"color:{_BLUE}; font-size:12px; font-weight:bold; "
-        f"border-bottom:1px solid {_BORDER}; padding-bottom:3px; margin-top:6px;"
-    )
-    return lbl
 
 
 class EsopForm(QDialog):
@@ -38,8 +21,8 @@ class EsopForm(QDialog):
         self._esop = esop
         self._editing = esop is not None
         self.setWindowTitle("编辑ESOP记录" if self._editing else "新增ESOP记录")
-        self.setMinimumWidth(560)
-        self.setMinimumHeight(560)
+        self.setMinimumWidth(500)
+        self.setMinimumHeight(480)
         self.setStyleSheet(f"background:{_LIGHT};")
         self._build()
         if self._editing:
@@ -71,13 +54,14 @@ class EsopForm(QDialog):
 
         lay = QVBoxLayout(content)
         lay.setContentsMargins(24, 12, 24, 12)
-        lay.setSpacing(6)
+        lay.setSpacing(8)
 
-        # Base form
         form = QFormLayout()
-        form.setSpacing(8)
+        form.setSpacing(12)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
+        # Employee ID
         self._eid_edit = QLineEdit()
         self._eid_edit.setPlaceholderText("输入工号或姓名搜索…")
         emp_mgr = self._mgr.get("employee")
@@ -89,81 +73,54 @@ class EsopForm(QDialog):
             self._eid_edit.setCompleter(completer)
         form.addRow("员工工号 *", self._eid_edit)
 
-        self._grant_date = QDateEdit()
-        self._grant_date.setCalendarPopup(True)
-        self._grant_date.setDate(QDate.currentDate())
-        form.addRow("授予日期", self._grant_date)
+        # Grant year (year-only spinner)
+        self._grant_year = QSpinBox()
+        self._grant_year.setRange(2000, 2050)
+        self._grant_year.setValue(date.today().year)
+        form.addRow("授予年份", self._grant_year)
 
-        lay.addLayout(form)
-        lay.addWidget(_section_label("份额信息"))
-
-        shares_form = QFormLayout()
-        shares_form.setSpacing(8)
-        shares_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        # Shares
         self._granted_spin = QDoubleSpinBox()
         self._granted_spin.setRange(0, 999_999_999)
         self._granted_spin.setDecimals(0)
         self._granted_spin.setSingleStep(1000)
-        self._granted_spin.valueChanged.connect(self._update_unvested)
-        shares_form.addRow("授予份额", self._granted_spin)
+        form.addRow("授予份额", self._granted_spin)
 
-        self._vested_spin = QDoubleSpinBox()
-        self._vested_spin.setRange(0, 999_999_999)
-        self._vested_spin.setDecimals(0)
-        self._vested_spin.setSingleStep(1000)
-        self._vested_spin.valueChanged.connect(self._update_unvested)
-        shares_form.addRow("已归属", self._vested_spin)
+        # 上年度授予份额 (stored in shares_vested)
+        self._prev_granted_spin = QDoubleSpinBox()
+        self._prev_granted_spin.setRange(0, 999_999_999)
+        self._prev_granted_spin.setDecimals(0)
+        self._prev_granted_spin.setSingleStep(1000)
+        form.addRow("上年度授予份额", self._prev_granted_spin)
 
-        unvested_row = QHBoxLayout()
-        self._unvested_lbl = QLabel("0")
-        self._unvested_lbl.setStyleSheet(
-            f"color:{_BLUE}; font-weight:bold; padding:3px 8px; "
-            f"background:#E8F0FE; border-radius:4px;"
-        )
-        unvested_row.addWidget(self._unvested_lbl)
-        unvested_row.addStretch(1)
-        shares_form.addRow("未归属（自动）", unvested_row)
-
-        lay.addLayout(shares_form)
-        lay.addWidget(_section_label("指导线 & 人才"))
-
-        guide_form = QFormLayout()
-        guide_form.setSpacing(8)
-        guide_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        # Guideline fields
         self._annual_guide = QDoubleSpinBox()
         self._annual_guide.setRange(0, 999_999_999)
         self._annual_guide.setDecimals(0)
-        guide_form.addRow("年度指导线", self._annual_guide)
+        form.addRow("年度指导线", self._annual_guide)
 
         self._upper_spin = QDoubleSpinBox()
         self._upper_spin.setRange(0, 999_999_999)
         self._upper_spin.setDecimals(0)
-        guide_form.addRow("授予上限", self._upper_spin)
+        form.addRow("授予上限", self._upper_spin)
 
         self._lower_spin = QDoubleSpinBox()
         self._lower_spin.setRange(0, 999_999_999)
         self._lower_spin.setDecimals(0)
-        guide_form.addRow("授予下限", self._lower_spin)
+        form.addRow("授予下限", self._lower_spin)
 
         self._talent_edit = QLineEdit()
         self._talent_edit.setPlaceholderText("如: A级/B+级")
-        guide_form.addRow("人才识别结果", self._talent_edit)
-
-        self._plan_edit = QLineEdit()
-        self._plan_edit.setPlaceholderText("如: 2023 期权计划")
-        guide_form.addRow("计划名称", self._plan_edit)
-
-        lay.addLayout(guide_form)
-        lay.addWidget(_section_label("备注"))
+        form.addRow("人才识别结果", self._talent_edit)
 
         self._notes_edit = QTextEdit()
         self._notes_edit.setFixedHeight(60)
-        lay.addWidget(self._notes_edit)
+        form.addRow("备注", self._notes_edit)
+
+        lay.addLayout(form)
 
         # Apply style
-        for w in content.findChildren((QLineEdit, QComboBox, QDateEdit, QDoubleSpinBox)):
+        for w in content.findChildren((QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox)):
             w.setStyleSheet(INPUT_QSS)
 
         # Buttons
@@ -182,24 +139,21 @@ class EsopForm(QDialog):
         btn_row.addWidget(save_btn)
         root.addLayout(btn_row)
 
-    def _update_unvested(self):
-        unvested = max(0.0, self._granted_spin.value() - self._vested_spin.value())
-        self._unvested_lbl.setText(f"{unvested:,.0f}")
-
     def _populate(self):
         s = self._esop
         self._eid_edit.setText(s.employee_id)
         self._eid_edit.setReadOnly(True)
-        if s.grant_date:
-            self._grant_date.setDate(_to_qdate(s.grant_date))
+        if s.grant_date and len(s.grant_date) >= 4:
+            try:
+                self._grant_year.setValue(int(s.grant_date[:4]))
+            except Exception:
+                pass
         self._granted_spin.setValue(float(s.shares_granted) if s.shares_granted else 0)
-        self._vested_spin.setValue(float(s.shares_vested) if s.shares_vested else 0)
-        self._update_unvested()
+        self._prev_granted_spin.setValue(float(s.shares_vested) if s.shares_vested else 0)
         self._annual_guide.setValue(float(s.annual_guideline) if s.annual_guideline else 0)
         self._upper_spin.setValue(float(s.grant_upper) if s.grant_upper else 0)
         self._lower_spin.setValue(float(s.grant_lower) if s.grant_lower else 0)
         self._talent_edit.setText(s.talent_result)
-        self._plan_edit.setText(s.plan_name)
         self._notes_edit.setPlainText(s.notes)
 
     def _parse_employee_id(self) -> str:
@@ -216,24 +170,24 @@ class EsopForm(QDialog):
             return
 
         granted = self._granted_spin.value()
-        vested = self._vested_spin.value()
-        unvested = max(0.0, granted - vested)
+        prev_granted = self._prev_granted_spin.value()
+        grant_date = f"{self._grant_year.value():04d}-01-01"
 
         from db.models import Esop
         s = Esop(
             esop_id=self._esop.esop_id if self._editing else None,
             employee_id=eid,
             employee_name="",
-            grant_date=self._grant_date.date().toString("yyyy-MM-dd"),
+            grant_date=grant_date,
             shares_granted=granted,
-            shares_vested=vested,
-            shares_unvested=unvested,
+            shares_vested=prev_granted,      # repurposed as 上年度授予份额
+            shares_unvested=0,
             annual_guideline=self._annual_guide.value(),
             grant_upper=self._upper_spin.value(),
             grant_lower=self._lower_spin.value(),
             talent_result=self._talent_edit.text().strip(),
             vest_schedule="[]",
-            plan_name=self._plan_edit.text().strip(),
+            plan_name="",
             notes=self._notes_edit.toPlainText().strip(),
             created_at="",
         )

@@ -58,6 +58,8 @@ class EmployeeForm(QDialog):
         hdr = QWidget()
         hdr.setStyleSheet(f"background:{_BLUE};")
         hdr.setFixedHeight(48)
+        self.setMinimumWidth(760)
+        self.setMinimumHeight(720)
         hdr_lay = QHBoxLayout(hdr)
         hdr_lay.setContentsMargins(20, 0, 20, 0)
         ttl = QLabel("编辑人员" if self._editing else "新增人员")
@@ -76,16 +78,19 @@ class EmployeeForm(QDialog):
 
         lay = QVBoxLayout(content)
         lay.setContentsMargins(24, 16, 24, 16)
-        lay.setSpacing(8)
+        lay.setSpacing(10)
 
+        def _make_form():
+            fl = QFormLayout()
+            fl.setSpacing(10)
+            fl.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+            fl.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+            return fl
         # ── 基本信息 ──
         lay.addWidget(_section_label("基本信息"))
         basic_grid = QHBoxLayout()
 
-        left_form = QFormLayout()
-        left_form.setSpacing(8)
-        left_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        left_form = _make_form()
         self._id_edit = QLineEdit()
         self._id_edit.setReadOnly(self._editing)
         if self._editing:
@@ -111,19 +116,12 @@ class EmployeeForm(QDialog):
         dob_row.addStretch(1)
         left_form.addRow("出生日期", dob_row)
 
-        right_form = QFormLayout()
-        right_form.setSpacing(8)
-        right_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        right_form = _make_form()
         self._phone_edit = QLineEdit()
         right_form.addRow("手机", self._phone_edit)
 
         self._email_edit = QLineEdit()
         right_form.addRow("邮箱", self._email_edit)
-
-        self._status_cb = QComboBox()
-        self._status_cb.addItems(["在职", "试用期", "已离职"])
-        right_form.addRow("状态", self._status_cb)
 
         self._type_cb = QComboBox()
         self._type_cb.addItems(["", "华为", "OD", "外包"])
@@ -138,10 +136,7 @@ class EmployeeForm(QDialog):
         lay.addWidget(_section_label("岗位信息"))
         pos_grid = QHBoxLayout()
 
-        pos_left = QFormLayout()
-        pos_left.setSpacing(8)
-        pos_left.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        pos_left = _make_form()
         self._dept_cb = QComboBox()
         self._dept_cb.currentIndexChanged.connect(self._on_dept_changed)
         pos_left.addRow("部门", self._dept_cb)
@@ -152,10 +147,7 @@ class EmployeeForm(QDialog):
         self._title_edit = QLineEdit()
         pos_left.addRow("职位", self._title_edit)
 
-        pos_right = QFormLayout()
-        pos_right.setSpacing(8)
-        pos_right.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        pos_right = _make_form()
         self._level_edit = QLineEdit()
         pos_right.addRow("职级", self._level_edit)
 
@@ -163,7 +155,7 @@ class EmployeeForm(QDialog):
         pos_right.addRow("职等", self._grade_edit)
 
         self._qual_edit = QLineEdit()
-        pos_right.addRow("资质", self._qual_edit)
+        pos_right.addRow("任职", self._qual_edit)
 
         pos_grid.addLayout(pos_left)
         pos_grid.addSpacing(20)
@@ -174,10 +166,7 @@ class EmployeeForm(QDialog):
         lay.addWidget(_section_label("教育背景"))
         edu_grid = QHBoxLayout()
 
-        edu_left = QFormLayout()
-        edu_left.setSpacing(8)
-        edu_left.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        edu_left = _make_form()
         self._edu_cb = QComboBox()
         self._edu_cb.addItems(["本科", "硕士", "博士", "其他"])
         edu_left.addRow("最高学历", self._edu_cb)
@@ -192,10 +181,7 @@ class EmployeeForm(QDialog):
         self._byr_edit.setPlaceholderText("如: 2015")
         edu_left.addRow("本科毕业年", self._byr_edit)
 
-        edu_right = QFormLayout()
-        edu_right.setSpacing(8)
-        edu_right.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        edu_right = _make_form()
         self._msch_edit = QLineEdit()
         edu_right.addRow("研究生院校", self._msch_edit)
 
@@ -215,20 +201,14 @@ class EmployeeForm(QDialog):
         lay.addWidget(_section_label("绩效信息"))
         perf_grid = QHBoxLayout()
 
-        perf_left = QFormLayout()
-        perf_left.setSpacing(8)
-        perf_left.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        perf_left = _make_form()
         self._perf_latest = QLineEdit()
         perf_left.addRow("最近绩效", self._perf_latest)
 
         self._perf_3y = QLineEdit()
         perf_left.addRow("近3年绩效", self._perf_3y)
 
-        perf_right = QFormLayout()
-        perf_right.setSpacing(8)
-        perf_right.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-
+        perf_right = _make_form()
         self._perf_5t = QLineEdit()
         perf_right.addRow("连续5次绩效", self._perf_5t)
 
@@ -309,12 +289,6 @@ class EmployeeForm(QDialog):
         self._phone_edit.setText(e.phone)
         self._email_edit.setText(e.email)
 
-        _status_map_rev = {"active": "在职", "probation": "试用期", "resigned": "已离职"}
-        st = _status_map_rev.get(e.status, "在职")
-        idx = self._status_cb.findText(st)
-        if idx >= 0:
-            self._status_cb.setCurrentIndex(idx)
-
         # Employee type
         etype = getattr(e, "employee_type", "") or ""
         idx = self._type_cb.findText(etype)
@@ -364,8 +338,6 @@ class EmployeeForm(QDialog):
             QMessageBox.warning(self, "提示", "工号和姓名为必填项")
             return
 
-        _status_map = {"在职": "active", "试用期": "probation", "已离职": "resigned"}
-
         from db.models import Employee
         emp = Employee(
             employee_id=eid,
@@ -392,7 +364,7 @@ class EmployeeForm(QDialog):
             perf_3y=self._perf_3y.text().strip(),
             perf_5times=self._perf_5t.text().strip(),
             perf_5y=self._perf_5y.text().strip(),
-            status=_status_map.get(self._status_cb.currentText(), "active"),
+            status=self._employee.status if self._editing else "active",
             employee_type=self._type_cb.currentText(),
             avatar_path="",
             notes=self._notes_edit.toPlainText().strip(),

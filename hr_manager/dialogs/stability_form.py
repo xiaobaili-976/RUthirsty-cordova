@@ -49,7 +49,13 @@ def _slider_row(label: str, lo=1, hi=10, default=5) -> tuple:
     return container, slider, val_lbl
 
 
-def _make_scroll_form(fields: list) -> tuple:
+def _make_form(parent_widget) -> "QFormLayout":
+    form = QFormLayout(parent_widget)
+    form.setContentsMargins(20, 12, 20, 12)
+    form.setSpacing(10)
+    form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+    form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+    return form
     """Build a scrollable form. fields = list of (label, widget).
     Returns (QScrollArea, list of widgets added)."""
     scroll = QScrollArea()
@@ -93,8 +99,9 @@ class CommLogSubDialog(QDialog):
         content.setStyleSheet("background:white;")
         form = QFormLayout(content)
         form.setContentsMargins(20, 14, 20, 12)
-        form.setSpacing(9)
+        form.setSpacing(10)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         self._date_edit = QDateEdit()
         self._date_edit.setCalendarPopup(True)
@@ -255,10 +262,7 @@ class StabilityForm(QDialog):
     def _build_tab1(self):
         w = QWidget()
         w.setStyleSheet("background:white;")
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 12, 20, 12)
-        form.setSpacing(9)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = _make_form(w)
 
         self._only_child = QComboBox(); self._only_child.addItems(["否", "是"])
         form.addRow("独生子女", self._only_child)
@@ -282,10 +286,7 @@ class StabilityForm(QDialog):
     def _build_tab2(self):
         w = QWidget()
         w.setStyleSheet("background:white;")
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 12, 20, 12)
-        form.setSpacing(9)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = _make_form(w)
 
         row, self._job_match_slider, self._job_match_lbl = _slider_row("", 1, 10, 5)
         form.addRow("岗位匹配度(1-10)", row)
@@ -305,10 +306,7 @@ class StabilityForm(QDialog):
     def _build_tab3(self):
         w = QWidget()
         w.setStyleSheet("background:white;")
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 12, 20, 12)
-        form.setSpacing(9)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = _make_form(w)
 
         row, self._workload_slider, _ = _slider_row("", 1, 10, 5)
         form.addRow("工作量(1-10)", row)
@@ -328,10 +326,7 @@ class StabilityForm(QDialog):
     def _build_tab4(self):
         w = QWidget()
         w.setStyleSheet("background:white;")
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 12, 20, 12)
-        form.setSpacing(9)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = _make_form(w)
 
         self._urg_type = QComboBox()
         self._urg_type.addItems(["薪酬晋升", "工作内容", "团队关系", "家庭原因", "个人发展", "其他"])
@@ -348,10 +343,7 @@ class StabilityForm(QDialog):
     def _build_tab5(self):
         w = QWidget()
         w.setStyleSheet("background:white;")
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 12, 20, 12)
-        form.setSpacing(9)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = _make_form(w)
 
         row, self._fam_harm_slider, _ = _slider_row("", 1, 10, 5)
         form.addRow("家庭和睦度(1-10)", row)
@@ -370,10 +362,7 @@ class StabilityForm(QDialog):
     def _build_tab6(self):
         w = QWidget()
         w.setStyleSheet("background:white;")
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 12, 20, 12)
-        form.setSpacing(9)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = _make_form(w)
 
         self._personality = QLineEdit(); self._personality.setPlaceholderText("如: INTJ / 外向型")
         form.addRow("性格类型", self._personality)
@@ -391,10 +380,7 @@ class StabilityForm(QDialog):
     def _build_tab7(self):
         w = QWidget()
         w.setStyleSheet("background:white;")
-        form = QFormLayout(w)
-        form.setContentsMargins(20, 12, 20, 12)
-        form.setSpacing(9)
-        form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        form = _make_form(w)
 
         self._fam_score = QDoubleSpinBox()
         self._fam_score.setRange(0, 10)

@@ -1,16 +1,17 @@
-"""EmployeePage — employee list with add/edit/delete and search."""
+"""EmployeePage — employee list with add/edit/delete."""
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
-    QComboBox, QMessageBox, QAbstractItemView
+    QTableWidget, QTableWidgetItem, QHeaderView,
+    QMessageBox, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 
 from styles import _BLUE, _LIGHT, _BORDER, _RED, TABLE_QSS, BTN_PRIMARY, BTN_SECONDARY, BTN_DANGER, EMP_TYPE_BORDER
+from pages.table_helpers import init_col_filter, apply_col_filters, show_col_customize_menu
 
 
-_COLS = ["工号", "姓名", "性别", "年龄", "员工类型", "部门", "小组", "职位", "职级", "状态"]
+_COLS = ["工号", "姓名", "性别", "年龄", "员工类型", "部门", "小组", "职位", "职级"]
 
 
 class EmployeePage(QWidget):
@@ -34,18 +35,11 @@ class EmployeePage(QWidget):
         top.addWidget(title)
         top.addStretch(1)
 
-        self._search = QLineEdit()
-        self._search.setPlaceholderText("搜索姓名/工号/职位…")
-        self._search.setFixedWidth(200)
-        self._search.setFixedHeight(32)
-        self._search.textChanged.connect(self._on_search)
-        top.addWidget(self._search)
-
-        self._status_filter = QComboBox()
-        self._status_filter.addItems(["全部状态", "在职", "试用期", "已离职"])
-        self._status_filter.setFixedHeight(32)
-        self._status_filter.currentIndexChanged.connect(self._load_table)
-        top.addWidget(self._status_filter)
+        customize_btn = QPushButton("表头定制")
+        customize_btn.setStyleSheet(BTN_SECONDARY)
+        customize_btn.setFixedHeight(32)
+        customize_btn.clicked.connect(self._on_customize)
+        top.addWidget(customize_btn)
 
         add_btn = QPushButton("+ 新增人员")
         add_btn.setStyleSheet(BTN_PRIMARY)
@@ -95,25 +89,16 @@ class EmployeePage(QWidget):
         bot.addWidget(del_btn)
         lay.addLayout(bot)
 
+        init_col_filter(self)
+
     def refresh(self):
         self._load_table()
-
-    def _get_status_filter(self) -> str | None:
-        idx = self._status_filter.currentIndex()
-        return {0: None, 1: "active", 2: "probation", 3: "resigned"}.get(idx)
 
     def _load_table(self, _=None):
         emp_mgr = self._mgr.get("employee")
         if not emp_mgr:
             return
-        query = self._search.text().strip()
-        status = self._get_status_filter()
-        if query:
-            emps = emp_mgr.search(query)
-            if status:
-                emps = [e for e in emps if e.status == status]
-        else:
-            emps = emp_mgr.list_employees(status=status)
+        emps = emp_mgr.list_employees()
 
         depts  = {r["dept_id"]: r["dept_name"] for r in emp_mgr.list_departments()}
         groups = {r["group_id"]: r["group_name"] for r in emp_mgr.list_groups()}
@@ -126,24 +111,20 @@ class EmployeePage(QWidget):
                 e.employee_type or "",
                 depts.get(e.dept_id, ""),
                 groups.get(e.group_id, ""),
-                e.job_title, e.job_level, e.display_status,
+                e.job_title, e.job_level,
             ]
             for col, val in enumerate(vals):
                 item = QTableWidgetItem(val)
                 item.setData(Qt.ItemDataRole.UserRole, e.employee_id)
-                if e.status == "resigned":
-                    item.setForeground(QColor("#aaa"))
-                elif e.status == "probation":
-                    item.setForeground(QColor("#E67E22"))
                 # Color employee_type column
-                elif col == 4 and val:
+                if col == 4 and val:
                     item.setForeground(QColor(EMP_TYPE_BORDER.get(val, "#AAB4C8")))
                 self._table.setItem(row, col, item)
 
-        self._count_lbl.setText(f"共 {len(emps)} 条")
+        apply_col_filters(self)
 
-    def _on_search(self, _):
-        self._load_table()
+    def _on_customize(self):
+        show_col_customize_menu(self, self.sender(), _COLS)
 
     def _selected_employee_id(self) -> str | None:
         row = self._table.currentRow()
