@@ -19,7 +19,7 @@ from widgets.right_drawer import RightDrawer
 
 # Pages (imported lazily to keep startup fast)
 from pages.dashboard_page import DashboardPage
-from pages.org_page       import OrgPage
+from pages.org_page       import OrgChartPage as OrgPage
 from pages.employee_page  import EmployeePage
 from pages.contract_page  import ContractPage
 from pages.salary_page    import SalaryPage
